@@ -1,0 +1,126 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "hex-local",
+  "title": "Hex",
+  "description": "Search dictation history and control Hex on this Mac",
+  "icon": "hex.png",
+  "author": "alvarogar4",
+  "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Productivity"
+  ],
+  "preferences": [
+    {
+      "name": "hexPath",
+      "type": "textfield",
+      "required": false,
+      "default": "/Applications/Hex.app/Contents/MacOS/hex",
+      "title": "Hex CLI Path",
+      "description": "Absolute path to the Hex command-line executable"
+    }
+  ],
+  "commands": [
+    {
+      "name": "search-history",
+      "title": "Search History",
+      "description": "Find a dictation and copy its final text to the clipboard",
+      "mode": "view"
+    },
+    {
+      "name": "start-dictation",
+      "title": "Start Dictation",
+      "description": "Start a locked dictation",
+      "mode": "no-view"
+    },
+    {
+      "name": "stop-dictation",
+      "title": "Stop Dictation",
+      "description": "Finish the current dictation and transcribe it",
+      "mode": "no-view"
+    },
+    {
+      "name": "toggle-dictation",
+      "title": "Toggle Dictation",
+      "description": "Start dictation when idle or finish the current dictation",
+      "mode": "no-view"
+    },
+    {
+      "name": "cancel-dictation",
+      "title": "Cancel Dictation",
+      "description": "Discard the current dictation after confirmation",
+      "mode": "no-view"
+    },
+    {
+      "name": "paste-last",
+      "title": "Paste Last",
+      "description": "Paste the last dictation at the current focus",
+      "mode": "no-view"
+    },
+    {
+      "name": "switch-model",
+      "title": "Switch Model",
+      "description": "Choose an installed transcription model or download another",
+      "mode": "view"
+    },
+    {
+      "name": "language",
+      "title": "Language",
+      "description": "Change the transcription language for the selected model",
+      "mode": "view"
+    },
+    {
+      "name": "vocabulary",
+      "title": "Vocabulary",
+      "description": "Manage terms and their sounds-like spellings",
+      "mode": "view"
+    },
+    {
+      "name": "microphone",
+      "title": "Microphone",
+      "description": "Choose a microphone by name and change microphone behavior",
+      "mode": "view"
+    },
+    {
+      "name": "status",
+      "title": "Status",
+      "description": "Check recording, model, queued jobs, and meeting status",
+      "mode": "view"
+    },
+    {
+      "name": "meetings",
+      "title": "Meetings",
+      "description": "Find recorded meetings and control meeting recording",
+      "mode": "view"
+    },
+    {
+      "name": "settings",
+      "title": "Settings",
+      "description": "Browse Hex settings and edit writable values",
+      "mode": "view"
+    }
+  ],
+  "scripts": {
+    "build": "ray build -e dist -o dist",
+    "dev": "ray develop",
+    "lint": "eslint src tests && prettier --check src tests package.json tsconfig.json eslint.config.mjs README.md",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@raycast/api": "^2.13.1",
+    "@raycast/utils": "^2.3.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "eslint": "^9.39.5",
+    "prettier": "^3.10.1",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.1"
+  }
+}
