@@ -116,13 +116,6 @@
       "mode": "no-view"
     },
     {
-      "name": "meeting-menu-bar",
-      "title": "Meeting Recording",
-      "description": "Show elapsed time and meeting controls while recording",
-      "mode": "menu-bar",
-      "interval": "10s"
-    },
-    {
       "name": "settings",
       "title": "Settings",
       "description": "Browse Hex settings and edit writable values",

@@ -3,7 +3,6 @@ import {
   ActionPanel,
   Alert,
   confirmAlert,
-  environment,
   Icon,
   List,
   showHUD,
@@ -65,9 +64,7 @@ export async function runControl(command: string[], args: string[] = [], noView 
 
 export async function showHexError(error: unknown, noView = false) {
   const title = error instanceof Error ? error.message : "Hex command failed";
-  if (environment.commandMode === "menu-bar") {
-    await showHUD(title);
-  } else if (error instanceof HexStopped && noView) {
+  if (error instanceof HexStopped && noView) {
     if (await confirmAlert({ title, primaryAction: { title: "Start Hex" } })) await startHex();
   } else {
     await showToast({

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, assert, expect, it, vi } from "vitest";
+import { afterAll, afterEach, expect, it, vi } from "vitest";
 import { LaunchType } from "@raycast/api";
 import { z } from "zod";
 import { executeHex, HexStopped } from "../src/cli";
@@ -10,16 +10,12 @@ import { cancelPreparation, chooseModel } from "../src/switch-model";
 import { runShortcut } from "../src/no-view";
 import StartMeeting from "../src/start-meeting";
 import StopMeeting from "../src/stop-meeting";
-import MeetingMenuBar from "../src/meeting-menu-bar";
 import Meetings from "../src/meetings";
 
 const ui = vi.hoisted(() => ({
-  environment: { commandMode: "no-view", commandName: "" },
-  LaunchType: { Background: "background", UserInitiated: "userInitiated" },
-  launchCommand: vi.fn().mockResolvedValue(undefined),
-  Color: { Red: "red" },
-  Icon: { CircleFilled: "circle", Stop: "stop", Window: "window", Microphone: "mic" },
-  MenuBarExtra: Object.assign(() => null, { Section: "section", Item: "item" }),
+  environment: { commandMode: "no-view" },
+  LaunchType: { UserInitiated: "userInitiated" },
+  Icon: { Stop: "stop", Window: "window", Microphone: "mic" },
   List: Object.assign(() => null, { EmptyView: "empty", Section: "section" }),
   ActionPanel: "actions",
   Action: "action",
@@ -39,7 +35,6 @@ const dir = mkdtempSync(join(tmpdir(), "raycast hex test "));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 afterEach(() => {
   ui.environment.commandMode = "no-view";
-  ui.environment.commandName = "";
   vi.clearAllMocks();
 });
 function fixture(script: string) {
@@ -213,8 +208,6 @@ it("parses populated meeting metadata without accessing a transcript", async () 
   expect((await readMeetings()).meetings).toEqual([meeting]);
 });
 
-const menuRefresh = { name: "meeting-menu-bar", type: LaunchType.Background };
-
 it.each([
   [undefined, []],
   ["   ", []],
@@ -225,20 +218,17 @@ it.each([
   expect(ui.closeMainWindow).toHaveBeenCalledBefore(ui.getPreferenceValues);
   expect(ui.showHUD).toHaveBeenCalledExactlyOnceWith(JSON.stringify(["meetings", "record", "--json", ...titleArgs]));
   expect(ui.showToast).not.toHaveBeenCalled();
-  expect(ui.launchCommand).toHaveBeenCalledExactlyOnceWith(menuRefresh);
 });
 
 it.each([
   [true, "Transcribing"],
   [false, "No meeting is recording"],
-] as const)("shows a HUD for a stop with changed=%s, even when the menu bar is disabled", async (changed, expected) => {
+] as const)("shows a HUD for a stop with changed=%s", async (changed, expected) => {
   fixture(emit({ version: 4, status: "done", changed, message: changed ? "Transcribing" : "Nothing to change" }));
-  ui.launchCommand.mockRejectedValueOnce(new Error("Command disabled"));
   await StopMeeting();
   expect(ui.closeMainWindow).toHaveBeenCalledBefore(ui.getPreferenceValues);
   expect(ui.showHUD).toHaveBeenCalledExactlyOnceWith(expected);
   expect(ui.showToast).not.toHaveBeenCalled();
-  expect(ui.launchCommand).toHaveBeenCalledExactlyOnceWith(menuRefresh);
 });
 
 it("offers Start Hex after a meeting shortcut gets exit 3", async () => {
@@ -251,106 +241,12 @@ it("offers Start Hex after a meeting shortcut gets exit 3", async () => {
   });
 });
 
-it("waits for status, then hides a stale recording after an exit 3", async () => {
-  usePromise.mockReturnValue({ isLoading: true });
-  expect(MeetingMenuBar()?.props.isLoading).toBe(true);
-  expect(usePromise).toHaveBeenLastCalledWith(readStatus, [], expect.anything());
-  fixture("process.exit(3)");
-  const error = await readStatus().catch((cause: unknown) => cause);
-  expect(error).toBeInstanceOf(HexStopped);
-  usePromise.mockReturnValue({ error, data: { meeting: { state: "recording" } }, isLoading: false });
-  expect(MeetingMenuBar()).toBeNull();
-});
-
-it.each(["idle", "starting", "transcribing"])("hides the menu bar while the meeting is %s", async (state) => {
-  const status = statusReply(null, null);
-  status.meeting.state = state;
-  fixture(emit(status));
-  usePromise.mockReturnValue({ data: await readStatus(), isLoading: false });
-  expect(MeetingMenuBar()).toBeNull();
-});
-
-it.each([
-  [0, "0m"],
-  [65, "1m"],
-  [3599, "59m"],
-  [3600, "1h 00m"],
-  [3725, "1h 02m"],
-  [null, undefined],
-])("renders the recording title, red icon and elapsed time for %s seconds", async (seconds, expected) => {
-  fixture(
-    emit({
-      ...statusReply(null, null),
-      meeting: { state: "recording", title: "Design sync", elapsed_seconds: seconds },
-    }),
-  );
-  usePromise.mockReturnValue({ data: await readStatus(), isLoading: false });
-  const bar = MeetingMenuBar();
-  assert(bar);
-  expect(bar.props.icon).toEqual({ source: "circle", tintColor: "red" });
-  expect(bar.props.title).toBe(expected);
-  expect(bar.props.children.props.title).toBe("Design sync");
-});
-
-function recordingMenu() {
-  ui.environment.commandMode = "menu-bar";
-  ui.environment.commandName = "meeting-menu-bar";
-  const revalidate = vi.fn();
-  usePromise.mockReturnValue({
-    data: { meeting: { state: "recording", title: null, elapsed_seconds: 1 } },
-    revalidate,
-  });
-  const bar = MeetingMenuBar();
-  assert(bar);
-  expect(bar.props.children.props.title).toBe("Untitled Meeting");
-  const items = bar.props.children.props.children;
-  expect(items).toHaveLength(2);
-  return { stop: items[0].props, open: items[1].props, revalidate };
-}
-
-it("stops and opens the Meetings pane from the recording menu", async () => {
-  const { stop, open, revalidate } = recordingMenu();
-  fixture(echoDone);
-  expect(stop.title).toBe("Stop & Transcribe");
-  await stop.onAction();
-  expect(ui.showHUD).toHaveBeenLastCalledWith(JSON.stringify(["meetings", "stop", "--json"]));
-  expect(revalidate).toHaveBeenCalledOnce();
-  expect(open.title).toBe("Open Meetings in Hex");
-  await open.onAction();
-  expect(ui.showHUD).toHaveBeenLastCalledWith(JSON.stringify(["window", "show", "--json", "--", "meetings"]));
-  expect(ui.showToast).not.toHaveBeenCalled();
-  expect(ui.launchCommand).not.toHaveBeenCalled();
-});
-
-it.each(["stop", "open"] as const)("reports exit 3 from the menu bar %s action in a HUD", async (action) => {
-  const menu = recordingMenu();
-  fixture("process.exit(3)");
-  await menu[action].onAction();
-  expect(ui.showHUD).toHaveBeenCalledExactlyOnceWith("Hex isn't running");
-  expect(ui.confirmAlert).not.toHaveBeenCalled();
-  expect(ui.showToast).not.toHaveBeenCalled();
-  expect(ui.launchCommand).not.toHaveBeenCalled();
-});
-
-it("revalidates after a successful menu stop even if the HUD fails", async () => {
-  const { stop, revalidate } = recordingMenu();
-  fixture(echoDone);
-  const failure = new Error("HUD unavailable");
-  ui.showHUD.mockRejectedValueOnce(failure);
-  await expect(stop.onAction()).rejects.toBe(failure);
-  expect(revalidate).toHaveBeenCalledOnce();
-  expect(ui.showHUD).toHaveBeenCalledOnce();
-  expect(ui.showToast).not.toHaveBeenCalled();
-});
-
-it("refreshes both the list and the menu bar from existing meeting actions", async () => {
+it("refreshes the Meetings list after starting and stopping a recording", async () => {
   ui.environment.commandMode = "view";
-  ui.environment.commandName = "meetings";
   const revalidate = vi.fn();
   usePromise.mockReturnValue({ data: { meetings: [] }, revalidate });
   const actions = Meetings().props.children[0].props.actions.props.children;
   fixture(echoDone);
-  ui.launchCommand.mockClear();
   await actions[1].props.onAction();
   await actions[2].props.onAction();
   expect(ui.showToast).toHaveBeenLastCalledWith({
@@ -358,5 +254,4 @@ it("refreshes both the list and the menu bar from existing meeting actions", asy
     title: JSON.stringify(["meetings", "stop", "--json"]),
   });
   expect(revalidate).toHaveBeenCalledTimes(2);
-  expect(ui.launchCommand.mock.calls).toEqual([[menuRefresh], [menuRefresh]]);
 });
