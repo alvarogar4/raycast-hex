@@ -1,7 +1,8 @@
 import { Action, ActionPanel, Icon, List } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
-import { inlineErrors, ReadError, RefreshAction, runControl } from "./feedback";
+import { inlineErrors, ReadError, RefreshAction } from "./feedback";
 import { readMeetings } from "./hex";
+import { runMeetingControl } from "./meeting-controls";
 import { OpenPaneAction } from "./open-pane-action";
 
 export default function Meetings() {
@@ -14,7 +15,7 @@ export default function Meetings() {
         title="Start Meeting Recording"
         icon={Icon.Microphone}
         onAction={async () => {
-          await runControl(["meetings", "record"]);
+          await runMeetingControl("record");
           revalidate();
         }}
       />
@@ -22,7 +23,7 @@ export default function Meetings() {
         title="Stop and Transcribe Meeting"
         icon={Icon.Stop}
         onAction={async () => {
-          await runControl(["meetings", "stop"]);
+          await runMeetingControl("stop");
           revalidate();
         }}
       />

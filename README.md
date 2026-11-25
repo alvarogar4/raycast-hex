@@ -35,6 +35,12 @@ In **Raycast Settings → Extensions → Hex**, assign hotkeys to the commands y
 | Meetings         | Search the newest 200 recorded meetings by title or app. Actions opens the Meetings pane, starts recording, or stops and transcribes a meeting. These actions are available on the empty list as well. Recording requires the Hex Meetings feature.                                   |
 | Settings         | Browse every setting reported by Hex. Open an editable row to change its value. The editor supports booleans, choices, numbers, shortcuts, device names, paths, and JSON. Hex validates the value. Optional settings accept `none`.                                                   |
 
+### Meeting recording
+
+Enable Meetings in Hex, then run **Start Meeting Recording**. Enter a title or leave it blank to use Hex’s calendar or provisional title. **Stop Meeting & Transcribe** ends the recording and asks Hex to transcribe it. Both commands support global hotkeys.
+
+Run **Meeting Recording** once in Raycast to activate the menu bar item. It appears only while Hex is recording a meeting. The red dot shows elapsed time, and its menu shows the meeting title, **Stop & Transcribe**, and **Open Meetings in Hex**. Raycast checks status on a 10-second interval. Starting or stopping from the extension also requests an immediate refresh.
+
 ### History filters
 
 Use the date dropdown for Today, Last 3 Days, Last 7 Days, or All Dates. **⇧⌘F** opens both application and date dropdowns. The application picker suggests names from the newest 200 entries and accepts a typed exact app name for older entries. Hex applies both filters before ranking and limiting. Scrolling loads another 50 matches, up to Hex’s limit of 10,000. Each row’s detail includes its application, local recording time, final text, and raw transcript.

@@ -96,6 +96,33 @@
       "mode": "view"
     },
     {
+      "name": "start-meeting",
+      "title": "Start Meeting Recording",
+      "description": "Record a meeting with an optional title",
+      "mode": "no-view",
+      "arguments": [
+        {
+          "name": "title",
+          "type": "text",
+          "placeholder": "Meeting title",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "stop-meeting",
+      "title": "Stop Meeting & Transcribe",
+      "description": "Stop recording the current meeting and transcribe it",
+      "mode": "no-view"
+    },
+    {
+      "name": "meeting-menu-bar",
+      "title": "Meeting Recording",
+      "description": "Show elapsed time and meeting controls while recording",
+      "mode": "menu-bar",
+      "interval": "10s"
+    },
+    {
       "name": "settings",
       "title": "Settings",
       "description": "Browse Hex settings and edit writable values",

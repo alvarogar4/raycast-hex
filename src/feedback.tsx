@@ -3,6 +3,7 @@ import {
   ActionPanel,
   Alert,
   confirmAlert,
+  environment,
   Icon,
   List,
   showHUD,
@@ -17,16 +18,18 @@ import { control } from "./hex";
 export const inlineErrors = { onError: () => {} };
 
 async function startHex(refresh?: () => void) {
+  let reply;
   try {
-    const reply = await control(["start"]);
-    await showToast({ title: reply.message });
-    refresh?.();
+    reply = await control(["start"]);
   } catch (error) {
     await showToast({
       style: Toast.Style.Failure,
       title: error instanceof Error ? error.message : "Could not start Hex",
     });
+    return;
   }
+  await showToast({ title: reply.message });
+  refresh?.();
 }
 
 export function ReadError({ error, retry }: { error: Error; retry: () => void }) {
@@ -46,21 +49,25 @@ export function ReadError({ error, retry }: { error: Error; retry: () => void })
   );
 }
 
-export async function runControl(command: string[], args: string[] = [], noView = false) {
+export async function runControl(command: string[], args: string[] = [], noView = false, unchangedMessage?: string) {
+  let reply;
   try {
-    const reply = await control(command, args);
-    if (noView) await showHUD(reply.message);
-    else await showToast({ style: Toast.Style.Success, title: reply.message });
-    return true;
+    reply = await control(command, args);
   } catch (error) {
     await showHexError(error, noView);
     return false;
   }
+  const title = !reply.changed && unchangedMessage ? unchangedMessage : reply.message;
+  if (noView) await showHUD(title);
+  else await showToast({ style: Toast.Style.Success, title });
+  return true;
 }
 
 export async function showHexError(error: unknown, noView = false) {
   const title = error instanceof Error ? error.message : "Hex command failed";
-  if (error instanceof HexStopped && noView) {
+  if (environment.commandMode === "menu-bar") {
+    await showHUD(title);
+  } else if (error instanceof HexStopped && noView) {
     if (await confirmAlert({ title, primaryAction: { title: "Start Hex" } })) await startHex();
   } else {
     await showToast({

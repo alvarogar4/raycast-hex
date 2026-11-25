@@ -1,9 +1,11 @@
 import { closeMainWindow } from "@raycast/api";
 import { confirmDiscard, runControl } from "./feedback";
+import { runMeetingControl } from "./meeting-controls";
 
-export async function runShortcut(command: string[]) {
+export async function runShortcut(command: string[], args: string[] = []) {
+  const [group, action] = command;
   if (
-    command[1] === "cancel" &&
+    action === "cancel" &&
     !(await confirmDiscard(
       "Discard the current dictation?",
       "Hex will discard the active recording.",
@@ -12,5 +14,8 @@ export async function runShortcut(command: string[]) {
   )
     return;
   await closeMainWindow();
-  await runControl(command, [], true);
+  if (group === "meetings" && (action === "record" || action === "stop")) {
+    return runMeetingControl(action, args);
+  }
+  await runControl(command, args, true);
 }
