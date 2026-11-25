@@ -6,10 +6,7 @@ import { runMeetingControl } from "./meeting-controls";
 
 function elapsedTime(seconds: number) {
   const minutes = Math.floor(seconds / 60);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return minutes >= 60
-    ? `${Math.floor(minutes / 60)}:${pad(minutes % 60)}`
-    : `${pad(minutes)}:${pad(Math.floor(seconds % 60))}`;
+  return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m` : `${minutes}m`;
 }
 
 export default function MeetingMenuBar() {

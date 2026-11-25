@@ -39,7 +39,7 @@ In **Raycast Settings → Extensions → Hex**, assign hotkeys to the commands y
 
 Enable Meetings in Hex, then run **Start Meeting Recording**. Enter a title or leave it blank to use Hex’s calendar or provisional title. **Stop Meeting & Transcribe** ends the recording and asks Hex to transcribe it. Both commands support global hotkeys.
 
-Run **Meeting Recording** once in Raycast to activate the menu bar item. It appears only while Hex is recording a meeting. The red dot shows elapsed time, and its menu shows the meeting title, **Stop & Transcribe**, and **Open Meetings in Hex**. Raycast checks status on a 10-second interval. Starting or stopping from the extension also requests an immediate refresh.
+Run **Meeting Recording** once in Raycast to activate the menu bar item. It appears only while Hex is recording a meeting. The red dot shows elapsed minutes (it refreshes every 10 s, so it shows minutes, not a ticking clock), and its menu shows the meeting title, **Stop & Transcribe**, and **Open Meetings in Hex**. Raycast checks status on a 10-second interval. Starting or stopping from the extension also requests an immediate refresh.
 
 ### History filters
 

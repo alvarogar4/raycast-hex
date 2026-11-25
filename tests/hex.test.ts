@@ -271,11 +271,11 @@ it.each(["idle", "starting", "transcribing"])("hides the menu bar while the meet
 });
 
 it.each([
-  [0, "00:00"],
-  [65, "01:05"],
-  [3599, "59:59"],
-  [3600, "1:00"],
-  [3725, "1:02"],
+  [0, "0m"],
+  [65, "1m"],
+  [3599, "59m"],
+  [3600, "1h 00m"],
+  [3725, "1h 02m"],
   [null, undefined],
 ])("renders the recording title, red icon and elapsed time for %s seconds", async (seconds, expected) => {
   fixture(
