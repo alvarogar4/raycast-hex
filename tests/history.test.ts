@@ -27,11 +27,19 @@ const result = vi.hoisted(() => ({
   isLoading: false,
   revalidate: vi.fn(),
 }));
+const action = vi.hoisted(() => ({ trashTranscript: vi.fn(), enabled: true }));
+vi.mock("../src/trash-transcript", () => action);
 vi.mock("@raycast/utils", () => ({ usePromise: () => result }));
 vi.mock("@raycast/api", () => {
   const component = () => null;
   return {
-    Action: Object.assign(component, { Push: "push", Paste: "paste", CopyToClipboard: "copy" }),
+    Action: Object.assign(component, {
+      Push: "push",
+      Paste: "paste",
+      CopyToClipboard: "copy",
+      Style: { Destructive: "destructive" },
+    }),
+    getPreferenceValues: () => ({ allowTranscriptTrash: action.enabled }),
     ActionPanel: "actions",
     List: Object.assign(component, {
       EmptyView: "empty",
@@ -43,6 +51,26 @@ vi.mock("@raycast/api", () => {
     Icon: { Filter: "filter" },
     Keyboard: { Shortcut: { Common: { Copy: { modifiers: ["cmd", "shift"], key: "c" } } } },
   };
+});
+it("binds Control-K to the selected transcript and refreshes only after a move", async () => {
+  const list = SearchHistory();
+  expect(list.props.children[1][0].props.actions.props.children[0].props.title).toContain("Trash ⌃K");
+  const destructive = list.props.children[1][0].props.actions.props.children.at(-1);
+  expect(destructive.props).toMatchObject({
+    title: "Move Transcript to Trash",
+    shortcut: { modifiers: ["ctrl"], key: "k" },
+  });
+  expect(list.props.children[0].props.actions.props.children).not.toContain(destructive);
+  action.trashTranscript.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  await destructive.props.onAction();
+  expect(result.revalidate).not.toHaveBeenCalled();
+  await destructive.props.onAction();
+  expect(action.trashTranscript).toHaveBeenCalledWith(result.data.entries[0]);
+  expect(result.revalidate).toHaveBeenCalledOnce();
+  action.enabled = false;
+  expect(SearchHistory().props.children[1][0].props.actions.props.children[0].props.title).toBe("Copy Dictation");
+  expect(SearchHistory().props.children[1][0].props.actions.props.children.at(-1)).toBe(false);
+  action.enabled = true;
 });
 it("invalidates Return on a keystroke while the previous CLI reply is still visible to the hook", () => {
   const initial = SearchHistory();

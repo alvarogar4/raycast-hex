@@ -1,16 +1,17 @@
 import { Action, ActionPanel, Icon, List } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { inlineErrors, ReadError, RefreshAction } from "./feedback";
-import { readMeetings } from "./hex";
+import { type Meeting, readMeetings } from "./hex";
 import { runMeetingControl } from "./meeting-controls";
 import { OpenPaneAction } from "./open-pane-action";
+import { trashMeeting } from "./trash-meeting";
 
 export default function Meetings() {
   const { data, error, isLoading, revalidate } = usePromise(readMeetings, [], inlineErrors);
   if (error) return <ReadError error={error} retry={revalidate} />;
-  const actions = (
+  const actions = (meeting?: Meeting) => (
     <ActionPanel>
-      <OpenPaneAction title="Open Meetings in Hex" pane="meetings" />
+      <OpenPaneAction title={meeting ? "Trash ⌃K  ·  Open Meetings in Hex" : "Open Meetings in Hex"} pane="meetings" />
       <Action
         title="Start Meeting Recording"
         icon={Icon.Microphone}
@@ -28,6 +29,17 @@ export default function Meetings() {
         }}
       />
       <RefreshAction refresh={revalidate} />
+      {meeting && (
+        <Action
+          title="Move Meeting to Trash"
+          icon={Icon.Trash}
+          style={Action.Style.Destructive}
+          shortcut={{ modifiers: ["ctrl"], key: "k" }}
+          onAction={async () => {
+            if (await trashMeeting(meeting)) revalidate();
+          }}
+        />
+      )}
     </ActionPanel>
   );
   return (
@@ -35,7 +47,7 @@ export default function Meetings() {
       <List.EmptyView
         title="No Matching Meetings"
         description="Open Actions to start a recording or open Meetings in Hex."
-        actions={actions}
+        actions={actions()}
       />
       <List.Section title="Recorded Meetings" subtitle={data?.truncated ? "Newest 200" : undefined}>
         {data?.meetings.map((meeting) => (
@@ -45,7 +57,7 @@ export default function Meetings() {
             subtitle={meeting.application ?? undefined}
             keywords={meeting.application ? [meeting.application] : []}
             accessories={[{ text: meeting.status }, { date: new Date(meeting.timestamp_ms) }]}
-            actions={actions}
+            actions={actions(meeting)}
           />
         ))}
       </List.Section>

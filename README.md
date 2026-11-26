@@ -4,7 +4,7 @@ Find a past dictation in Raycast and press **Return** to copy its final text to 
 
 ## Load it locally
 
-With Hex 3.4.0, Raycast, and Node.js 24 installed, run the following.
+With Hex 3.5.0, Raycast, and Node.js 24 installed, run the following.
 
 ```sh
 git clone https://github.com/alvarogar4/raycast-hex.git
@@ -39,15 +39,26 @@ In **Raycast Settings → Extensions → Hex**, assign hotkeys to the commands y
 
 Enable Meetings in Hex, then run **Start Meeting Recording**. Enter a title or leave it blank to use Hex’s calendar or provisional title. **Stop Meeting & Transcribe** ends the recording and asks Hex to transcribe it. Both commands support global hotkeys.
 
+### Deleting a meeting
+
+Select a meeting in **Meetings** and press **⌃K** directly from the list. The footer shows the shortcut beside **Open Meetings in Hex**. The confirmation lists the export paths Hex will trash along with the meeting folder, including any edited or replaced files there. The extension checks those paths again before invoking the running Hex 3.5.0 app. Hex refuses if it finds an active recording, transcription, or notes job. In 3.5.0 a new notes job can start between that check and the move. [Hex meeting delete command](https://github.com/anomalyco/hex/blob/v3.5.0/docs/cli.md#L356) · [Native deletion](https://github.com/anomalyco/hex/blob/v3.5.0/src/meeting/delete.rs#L145)
+
 ### History filters
 
 Use the date dropdown for Today, Last 3 Days, Last 7 Days, or All Dates. **⇧⌘F** opens both application and date dropdowns. The application picker suggests names from the newest 200 entries and accepts a typed exact app name for older entries. Hex applies both filters before ranking and limiting. Scrolling loads another 50 matches, up to Hex’s limit of 10,000. Each row’s detail includes its application, local recording time, final text, and raw transcript.
+
+### Moving a quick transcript to Trash
+
+Quit Hex, open **Search History**, select a dictation, and press **⌃K** directly from the list. The footer shows the shortcut beside **Copy Dictation**. Check the ID, text, and recording time, then confirm **Move to Trash**. The action supports Hex 3.4.0 and 3.5.0 and takes Hex’s history lock before changing the shared file. You can turn it off in the command preferences.
+
+In Finder’s Trash, the **Hex Transcript** folder for the selected ID contains `transcript.txt`, the full `entry.json` including previous versions, and any saved `recording.wav`. Drag these files out of Trash to recover them. If saving the change to Hex History fails, the original stays in History. A retry checks the archived text, metadata, and recording before reusing that folder. If Raycast stops during the initial copy, Finder’s Trash may also contain a folder marked `(incomplete)` with the files copied so far.
 
 ### CLI limits and privacy
 
 - Hex 3.4.0 has no JSON command for enumerating input microphones. Its microphone setting accepts the exact device name or the system default.
 - `meetings search` returns human-readable text only. The extension searches metadata from `meetings list --json`. Full-text transcript and note search is available in the Hex CLI. The pane-opening command opens the whole pane.
-- All runtime reads and controls invoke the configured executable with an argument array. History stays in memory while the view is open. The extension makes no network requests, sends no telemetry, and does not log dictation text. The two copy actions mark clipboard content as concealed. A confirmed model installation asks Hex to download the model.
+- **Move Transcript to Trash** archives the selected dictation before updating the shared history file. **Move Meeting to Trash** uses Hex’s native CLI command.
+- All other reads and controls invoke the configured executable with an argument array. History stays in memory while the view is open. The extension makes no network requests, sends no telemetry, and does not log dictation text. The two copy actions mark clipboard content as concealed. A confirmed model installation asks Hex to download the model.
 - When Hex is closed, history and recorded meetings remain readable through the CLI. Controls offer **Start Hex**. After starting it, invoke the intended action again.
 
 Checked against the installed Hex 3.4.0 CLI on November 24, 2026. [Control CLI](https://github.com/anomalyco/hex/blob/v3.4.0/docs/cli.md) · [History and meeting formats](https://github.com/anomalyco/hex/blob/v3.4.0/docs/transcript-cli.md)
@@ -57,6 +68,8 @@ Checked against the installed Hex 3.4.0 CLI on November 24, 2026. [Control CLI](
 Run `npm run build`, `npm run lint`, and `npm test`. Lint runs Raycast’s ESLint rules and Prettier locally. The tests use a temporary fixture executable and synthetic text. They can run with Hex closed.
 
 On November 24, 2026, all eight view commands rendered in Raycast through `ray develop`. Live CLI checks covered newest-first and ranked history, raw text, app and date filters, the model catalog, active language, vocabulary, all three microphone settings, status, the empty meetings list, and settings. The manifest also passed Raycast’s published JSON Schema. The separate Store author check requires a registered Raycast handle.
+
+On November 26, 2026, the installed Hex 3.5.0 CLI returned its native refusal for an unknown meeting ID. In Raycast, both populated lists displayed the footer shortcut and opened their confirmation directly with **⌃K**. A synthetic dictation on a separate mounted volume went through Finder’s Trash with its text, metadata, and WAV intact, and its sibling stayed in History.
 
 The write checks ran against fixtures. Coverage includes the five no-view controls, model selection and installation, a changed download during confirmation, vocabulary and settings arguments, the History and Meetings pane arguments, meeting controls, rejected commands, and starting Hex after exit 3. Populated meetings were checked with synthetic data. The interactive clipboard, live recording, model downloads, real pane navigation, and live setting changes were left out of the smoke test.
 

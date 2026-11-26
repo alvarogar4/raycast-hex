@@ -1,10 +1,11 @@
-import { Action, ActionPanel, Form, Icon, List, useNavigation, Keyboard } from "@raycast/api";
+import { Action, ActionPanel, Form, getPreferenceValues, Icon, List, useNavigation, Keyboard } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { useRef, useState } from "react";
 import { setTimeout as delay } from "node:timers/promises";
 import { inlineErrors, ReadError, RefreshAction } from "./feedback";
 import { readApps, readHistory } from "./hex";
 import { OpenPaneAction } from "./open-pane-action";
+import { trashTranscript } from "./trash-transcript";
 
 const dates = [
   ["", "All Dates"],
@@ -63,6 +64,7 @@ function verbatim(value: string) {
 }
 
 export default function SearchHistory() {
+  const { allowTranscriptTrash } = getPreferenceValues<{ allowTranscriptTrash: boolean }>();
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Filters>({ app: "", since: "" });
   const [limit, setLimit] = useState(50);
@@ -145,6 +147,7 @@ export default function SearchHistory() {
                   <List.Item.Detail.Metadata>
                     <List.Item.Detail.Metadata.Label title="Application" text={app} />
                     <List.Item.Detail.Metadata.Label title="Recorded" text={time} />
+                    <List.Item.Detail.Metadata.Label title="Transcript ID" text={String(entry.id)} />
                   </List.Item.Detail.Metadata>
                 }
               />
@@ -153,7 +156,7 @@ export default function SearchHistory() {
               <ActionPanel>
                 <Action.CopyToClipboard
                   concealed
-                  title="Copy Dictation"
+                  title={allowTranscriptTrash ? "Trash ⌃K  ·  Copy Dictation" : "Copy Dictation"}
                   content={entry.final_text}
                   shortcut={{ modifiers: ["cmd"], key: "c" }}
                 />
@@ -169,6 +172,17 @@ export default function SearchHistory() {
                 <OpenPaneAction pane="history" />
                 {filterAction}
                 <RefreshAction refresh={revalidate} />
+                {allowTranscriptTrash && (
+                  <Action
+                    title="Move Transcript to Trash"
+                    icon={Icon.Trash}
+                    style={Action.Style.Destructive}
+                    shortcut={{ modifiers: ["ctrl"], key: "k" }}
+                    onAction={async () => {
+                      if (await trashTranscript(entry)) revalidate();
+                    }}
+                  />
+                )}
               </ActionPanel>
             }
           />

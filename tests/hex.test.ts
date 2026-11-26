@@ -203,7 +203,14 @@ it("preserves an asynchronous download failure in status", async () => {
   expect((await readStatus()).model.error).toBe("Download interrupted");
 });
 it("parses populated meeting metadata without accessing a transcript", async () => {
-  const meeting = { id: "sample", title: "Example", application: null, status: "complete", timestamp_ms: 123 };
+  const meeting = {
+    id: "sample",
+    title: "Example",
+    application: null,
+    status: "complete",
+    timestamp_ms: 123,
+    in_progress: false,
+  };
   fixture(emit({ version: 1, meetings: [meeting], truncated: false }));
   expect((await readMeetings()).meetings).toEqual([meeting]);
 });

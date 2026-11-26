@@ -27,6 +27,16 @@
       "name": "search-history",
       "title": "Search History",
       "description": "Find a dictation and copy its final text to the clipboard",
+      "preferences": [
+        {
+          "name": "allowTranscriptTrash",
+          "type": "checkbox",
+          "label": "Allow moving transcripts to Trash",
+          "description": "Show the Move Transcript to Trash action on selected dictations",
+          "required": false,
+          "default": true
+        }
+      ],
       "mode": "view"
     },
     {
@@ -132,6 +142,7 @@
   "dependencies": {
     "@raycast/api": "^2.13.1",
     "@raycast/utils": "^2.3.3",
+    "jsonc-parser": "^3.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {

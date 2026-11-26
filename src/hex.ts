@@ -28,6 +28,7 @@ const historyEntry = z.object({
   final_text: z.string(),
   raw_text: z.string().nullish(),
 });
+export type HistoryEntry = z.infer<typeof historyEntry>;
 const historyReply = z.object({
   version: v1,
   entries: z.array(historyEntry),
@@ -136,21 +137,23 @@ export function readSettings(key?: string) {
   return hex(key ? ["settings", "get", "--json", "--", key] : ["settings", "list", "--json"], settingsReply);
 }
 
+const meeting = z.object({
+  id: z.string(),
+  title: z.string(),
+  timestamp_ms: z.number(),
+  application: z.string().nullable(),
+  status: z.string(),
+  in_progress: z.boolean(),
+});
+export type Meeting = z.infer<typeof meeting>;
+
 export function readMeetings() {
   return hex(
     ["meetings", "list", "--json", "--limit", "200"],
     z.object({
       version: v1,
       truncated: z.boolean(),
-      meetings: z.array(
-        z.object({
-          id: z.string(),
-          title: z.string(),
-          timestamp_ms: z.number(),
-          application: z.string().nullable(),
-          status: z.string(),
-        }),
-      ),
+      meetings: z.array(meeting),
     }),
   );
 }
