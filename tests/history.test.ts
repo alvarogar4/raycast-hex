@@ -40,7 +40,7 @@ vi.mock("@raycast/api", () => {
       Style: { Destructive: "destructive" },
     }),
     getPreferenceValues: () => ({ allowTranscriptTrash: action.enabled }),
-    ActionPanel: "actions",
+    ActionPanel: Object.assign(component, { Section: "actionSection" }),
     List: Object.assign(component, {
       EmptyView: "empty",
       Dropdown: Object.assign(component, { Item: "option" }),
@@ -54,13 +54,20 @@ vi.mock("@raycast/api", () => {
 });
 it("binds Control-K to the selected transcript and refreshes only after a move", async () => {
   const list = SearchHistory();
-  expect(list.props.children[1][0].props.actions.props.children[0].props.title).toContain("Trash ⌃K");
-  const destructive = list.props.children[1][0].props.actions.props.children.at(-1);
+  const actions = list.props.children[1][0].props.actions.props.children;
+  expect(actions[0].props.title).toBe("Copy Dictation");
+  const sectionForTrash = actions.at(-1);
+  expect(sectionForTrash.type).toBe("actionSection");
+  const destructive = sectionForTrash.props.children;
   expect(destructive.props).toMatchObject({
     title: "Move Transcript to Trash",
     shortcut: { modifiers: ["ctrl"], key: "k" },
   });
-  expect(list.props.children[0].props.actions.props.children).not.toContain(destructive);
+  expect(
+    list.props.children[0].props.actions.props.children.some(
+      (action: { type: unknown }) => action.type === "actionSection",
+    ),
+  ).toBe(false);
   action.trashTranscript.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   await destructive.props.onAction();
   expect(result.revalidate).not.toHaveBeenCalled();

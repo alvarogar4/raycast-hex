@@ -8,7 +8,7 @@ import type { Meeting } from "../src/hex";
 
 const ui = vi.hoisted(() => ({
   Action: Object.assign(() => null, { Style: { Destructive: "destructive" } }),
-  ActionPanel: "actions",
+  ActionPanel: Object.assign(() => null, { Section: "actionSection" }),
   Alert: { ActionStyle: { Destructive: "destructive" } },
   Icon: { Trash: "trash", Microphone: "mic", Stop: "stop" },
   List: Object.assign(() => null, { Item: "item", EmptyView: "empty", Section: "section" }),
@@ -68,15 +68,22 @@ process.exitCode = !list && ${refused} ? 1 : 0;
       .map((s) => JSON.parse(s));
 }
 
-it("shows the shortcut in the row footer, confirms the exports and sends the exact selected ID to Hex", async () => {
+it("keeps Trash in its own action section and confirms the selected meeting", async () => {
   const calls = fixture([row]);
   const revalidate = vi.fn();
   usePromise.mockReturnValue({ data: { meetings: [row] }, revalidate });
   const [empty, section] = Meetings().props.children;
   const actions = section.props.children[0].props.actions.props.children;
-  expect(actions[0].props.title).toBe("Trash ⌃K  ·  Open Meetings in Hex");
-  expect(empty.props.actions.props.children[0].props.title).not.toContain("⌃K");
-  const trash = actions.at(-1);
+  expect(actions[0].props.title).toBe("Open Meetings in Hex");
+  expect(
+    empty.props.actions.props.children.some(
+      (action: { type?: unknown } | null) => action?.type === ui.ActionPanel.Section,
+    ),
+  ).toBe(false);
+  const sectionForTrash = actions.at(-1);
+  expect(sectionForTrash.type).toBe(ui.ActionPanel.Section);
+  const trash = sectionForTrash.props.children;
+  expect(trash.props.title).toBe("Move Meeting to Trash");
   expect(trash.props.shortcut).toEqual({ modifiers: ["ctrl"], key: "k" });
   await trash.props.onAction();
   expect(ui.confirmAlert.mock.calls[0][0].message).toContain("/Documents/Planning.md");

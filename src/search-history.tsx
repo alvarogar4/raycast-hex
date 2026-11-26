@@ -156,7 +156,7 @@ export default function SearchHistory() {
               <ActionPanel>
                 <Action.CopyToClipboard
                   concealed
-                  title={allowTranscriptTrash ? "Trash ⌃K  ·  Copy Dictation" : "Copy Dictation"}
+                  title="Copy Dictation"
                   content={entry.final_text}
                   shortcut={{ modifiers: ["cmd"], key: "c" }}
                 />
@@ -173,15 +173,17 @@ export default function SearchHistory() {
                 {filterAction}
                 <RefreshAction refresh={revalidate} />
                 {allowTranscriptTrash && (
-                  <Action
-                    title="Move Transcript to Trash"
-                    icon={Icon.Trash}
-                    style={Action.Style.Destructive}
-                    shortcut={{ modifiers: ["ctrl"], key: "k" }}
-                    onAction={async () => {
-                      if (await trashTranscript(entry)) revalidate();
-                    }}
-                  />
+                  <ActionPanel.Section>
+                    <Action
+                      title="Move Transcript to Trash"
+                      icon={Icon.Trash}
+                      style={Action.Style.Destructive}
+                      shortcut={{ modifiers: ["ctrl"], key: "k" }}
+                      onAction={async () => {
+                        if (await trashTranscript(entry)) revalidate();
+                      }}
+                    />
+                  </ActionPanel.Section>
                 )}
               </ActionPanel>
             }

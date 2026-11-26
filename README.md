@@ -41,7 +41,7 @@ Enable Meetings in Hex, then run **Start Meeting Recording**. Enter a title or l
 
 ### Deleting a meeting
 
-Select a meeting in **Meetings** and press **⌃K** directly from the list. The footer shows the shortcut beside **Open Meetings in Hex**. The confirmation lists the export paths Hex will trash along with the meeting folder, including any edited or replaced files there. The extension checks those paths again before invoking the running Hex 3.5.0 app. Hex refuses if it finds an active recording, transcription, or notes job. In 3.5.0 a new notes job can start between that check and the move. [Hex meeting delete command](https://github.com/anomalyco/hex/blob/v3.5.0/docs/cli.md#L356) · [Native deletion](https://github.com/anomalyco/hex/blob/v3.5.0/src/meeting/delete.rs#L145)
+Select a meeting in **Meetings** and press **⌃K** directly from the list. In the Action Panel, **Move Meeting to Trash** has its own section and shortcut. The confirmation lists the export paths Hex will trash along with the meeting folder, including any edited or replaced files there. The extension checks those paths again before invoking the running Hex 3.5.0 app. Hex refuses if it finds an active recording, transcription, or notes job. In 3.5.0 a new notes job can start between that check and the move. [Hex meeting delete command](https://github.com/anomalyco/hex/blob/v3.5.0/docs/cli.md#L356) · [Native deletion](https://github.com/anomalyco/hex/blob/v3.5.0/src/meeting/delete.rs#L145)
 
 ### History filters
 
@@ -49,7 +49,7 @@ Use the date dropdown for Today, Last 3 Days, Last 7 Days, or All Dates. **⇧�
 
 ### Moving a quick transcript to Trash
 
-Quit Hex, open **Search History**, select a dictation, and press **⌃K** directly from the list. The footer shows the shortcut beside **Copy Dictation**. Check the ID, text, and recording time, then confirm **Move to Trash**. The action supports Hex 3.4.0 and 3.5.0 and takes Hex’s history lock before changing the shared file. You can turn it off in the command preferences.
+Quit Hex, open **Search History**, select a dictation, and press **⌃K** directly from the list. In the Action Panel, **Move Transcript to Trash** has its own section and shortcut. Check the ID, text, and recording time, then confirm **Move to Trash**. The action supports Hex 3.4.0 and 3.5.0 and takes Hex’s history lock before changing the shared file. You can turn it off in the command preferences.
 
 In Finder’s Trash, the **Hex Transcript** folder for the selected ID contains `transcript.txt`, the full `entry.json` including previous versions, and any saved `recording.wav`. Drag these files out of Trash to recover them. If saving the change to Hex History fails, the original stays in History. A retry checks the archived text, metadata, and recording before reusing that folder. If Raycast stops during the initial copy, Finder’s Trash may also contain a folder marked `(incomplete)` with the files copied so far.
 
@@ -69,7 +69,7 @@ Run `npm run build`, `npm run lint`, and `npm test`. Lint runs Raycast’s ESLin
 
 On November 24, 2026, all eight view commands rendered in Raycast through `ray develop`. Live CLI checks covered newest-first and ranked history, raw text, app and date filters, the model catalog, active language, vocabulary, all three microphone settings, status, the empty meetings list, and settings. The manifest also passed Raycast’s published JSON Schema. The separate Store author check requires a registered Raycast handle.
 
-On November 26, 2026, the installed Hex 3.5.0 CLI returned its native refusal for an unknown meeting ID. In Raycast, both populated lists displayed the footer shortcut and opened their confirmation directly with **⌃K**. A synthetic dictation on a separate mounted volume went through Finder’s Trash with its text, metadata, and WAV intact, and its sibling stayed in History.
+On November 26, 2026, the installed Hex 3.5.0 CLI returned its native refusal for an unknown meeting ID. In Raycast, both populated lists opened their confirmation directly with **⌃K**. A synthetic dictation on a separate mounted volume went through Finder’s Trash with its text, metadata, and WAV intact, and its sibling stayed in History.
 
 The write checks ran against fixtures. Coverage includes the five no-view controls, model selection and installation, a changed download during confirmation, vocabulary and settings arguments, the History and Meetings pane arguments, meeting controls, rejected commands, and starting Hex after exit 3. Populated meetings were checked with synthetic data. The interactive clipboard, live recording, model downloads, real pane navigation, and live setting changes were left out of the smoke test.
 

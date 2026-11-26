@@ -11,7 +11,7 @@ export default function Meetings() {
   if (error) return <ReadError error={error} retry={revalidate} />;
   const actions = (meeting?: Meeting) => (
     <ActionPanel>
-      <OpenPaneAction title={meeting ? "Trash ⌃K  ·  Open Meetings in Hex" : "Open Meetings in Hex"} pane="meetings" />
+      <OpenPaneAction title="Open Meetings in Hex" pane="meetings" />
       <Action
         title="Start Meeting Recording"
         icon={Icon.Microphone}
@@ -30,15 +30,17 @@ export default function Meetings() {
       />
       <RefreshAction refresh={revalidate} />
       {meeting && (
-        <Action
-          title="Move Meeting to Trash"
-          icon={Icon.Trash}
-          style={Action.Style.Destructive}
-          shortcut={{ modifiers: ["ctrl"], key: "k" }}
-          onAction={async () => {
-            if (await trashMeeting(meeting)) revalidate();
-          }}
-        />
+        <ActionPanel.Section>
+          <Action
+            title="Move Meeting to Trash"
+            icon={Icon.Trash}
+            style={Action.Style.Destructive}
+            shortcut={{ modifiers: ["ctrl"], key: "k" }}
+            onAction={async () => {
+              if (await trashMeeting(meeting)) revalidate();
+            }}
+          />
+        </ActionPanel.Section>
       )}
     </ActionPanel>
   );
