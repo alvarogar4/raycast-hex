@@ -2,9 +2,9 @@ import { getPreferenceValues } from "@raycast/api";
 import { z } from "zod";
 import { executeHex } from "./cli";
 
-function hex<T>(args: string[], schema: z.ZodType<T>, signal?: AbortSignal) {
+function hex<T>(args: string[], schema: z.ZodType<T>, signal?: AbortSignal, env?: NodeJS.ProcessEnv) {
   const { hexPath } = getPreferenceValues<{ hexPath: string }>();
-  return executeHex(hexPath || "/Applications/Hex.app/Contents/MacOS/hex", args, schema, signal);
+  return executeHex(hexPath || "/Applications/Hex.app/Contents/MacOS/hex", args, schema, signal, env);
 }
 
 const v4 = z.literal(4);
@@ -147,7 +147,7 @@ const meeting = z.object({
 });
 export type Meeting = z.infer<typeof meeting>;
 
-export function readMeetings() {
+export function readMeetings(library?: string) {
   return hex(
     ["meetings", "list", "--json", "--limit", "200"],
     z.object({
@@ -155,5 +155,7 @@ export function readMeetings() {
       truncated: z.boolean(),
       meetings: z.array(meeting),
     }),
+    undefined,
+    library ? { ...process.env, HEX_APPLICATION_SUPPORT_DIR: library } : undefined,
   );
 }
