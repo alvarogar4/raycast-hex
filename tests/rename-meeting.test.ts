@@ -36,7 +36,7 @@ vi.mock("@raycast/api", () => ({
 vi.mock("@raycast/utils", () => ({ usePromise: ui.usePromise }));
 afterEach(() => vi.clearAllMocks());
 
-const library = "/test/library";
+const library = { root: "/test/library", executable: "/test/hex" };
 const meeting: Meeting = {
   id: "first",
   title: "Weekly sync",
@@ -106,7 +106,8 @@ it("keeps an old save from dismissing another form and ignores repeat submission
     complete = resolve;
   });
   vi.mocked(renameMeeting).mockReturnValueOnce(promise);
-  const form = RenameMeetingForm({ meeting, library, refresh: vi.fn() });
+  const refresh = vi.fn();
+  const form = RenameMeetingForm({ meeting, library, refresh });
   const submit = form.props.actions.props.children.props.onSubmit;
   const save = submit({ title: "First change" });
   form.props.children[0].props.onChange("Unsubmitted correction");
@@ -117,5 +118,6 @@ it("keeps an old save from dismissing another form and ignores repeat submission
   unmount();
   complete();
   await save;
+  expect(refresh).toHaveBeenCalledOnce();
   expect(ui.pop).not.toHaveBeenCalled();
 });

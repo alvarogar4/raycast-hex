@@ -1,4 +1,4 @@
-import { getPreferenceValues } from "@raycast/api";
+import { environment } from "@raycast/api";
 import { applyEdits, modify } from "jsonc-parser/lib/esm/main.js";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
@@ -6,8 +6,7 @@ import { lstat, open, readFile, realpath, rename, rm, writeFile } from "node:fs/
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { z } from "zod";
-import { HexStopped } from "./cli";
-import { type Meeting, readMeetings, renameWithHex, supportsMeetingRename } from "./hex";
+import { type Meeting, readMeetings, renameWithHex, resolveHexExecutable, supportsMeetingRename } from "./hex";
 import { lockHistory } from "./transcript-store";
 
 const manifest = z.object({
@@ -28,48 +27,56 @@ function libraryPath() {
   return isAbsolute(support) ? realpath(support).catch(() => undefined) : undefined;
 }
 
+export type MeetingLibrary = { root: string; executable: string };
+
 export async function listRecordings() {
-  const library = await libraryPath();
-  return { ...(await readMeetings(library)), library };
+  const [root, executable] = await Promise.all([libraryPath(), resolveHexExecutable()]);
+  return { ...(await readMeetings(root, executable)), library: root ? { root, executable } : undefined };
 }
 
 export function canRenameMeeting(meeting: Meeting) {
   return !meeting.in_progress && ["complete", "interrupted", "failed"].includes(meeting.status);
 }
 
-export async function renameMeeting(selected: Meeting, title: string, signal: AbortSignal, library: string) {
+export async function renameMeeting(selected: Meeting, title: string, signal: AbortSignal, library: MeetingLibrary) {
   const name = title.trim();
   if (!name) throw new Error("Enter a meeting title.");
   if (!selected.id || selected.id === "." || selected.id === ".." || /[\\/\0]/.test(selected.id))
     throw new Error("Invalid Hex meeting ID.");
-  if ((await libraryPath()) !== library) throw new Error("The Hex library changed. Reopen Meetings and try again.");
+  const { root, executable } = library;
+  if ((await libraryPath()) !== root || (await resolveHexExecutable()) !== executable)
+    throw new Error("The Hex library changed. Reopen Meetings and try again.");
   signal.throwIfAborted();
-  const native = await supportsMeetingRename(signal);
-  if (native) {
+  const instance = await lockHistory(root);
+  if (instance) {
+    try {
+      const installed = "/Applications/Hex.app/Contents/MacOS/hex";
+      if (executable !== installed && executable !== (await realpath(installed)))
+        throw new Error("Offline rename requires the installed Hex.app CLI.");
+      await writeTitle(library, selected, name, signal);
+    } finally {
+      await instance.close();
+    }
+    return;
+  }
+  if (!(await supportsMeetingRename(executable, signal)))
+    throw new Error("This Hex CLI has no live rename command. Save after Hex closes.");
+  // Hold this across the selection check and reply so two Raycast saves can't both pass on the old title.
+  const request = await open(
+    join(environment.supportPath, "meeting-rename.lock"),
+    constants.O_CREAT | constants.O_RDWR | constants.O_NONBLOCK | constants.O_NOFOLLOW | O_EXLOCK,
+    0o600,
+  ).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "EAGAIN") throw new Error("Another rename is in progress. Try saving again.");
+    throw error;
+  });
+  try {
     await verifySelection(library, selected);
     signal.throwIfAborted();
-    try {
-      await renameWithHex(selected.id, name, library, signal);
-      return;
-    } catch (error) {
-      if (!(error instanceof HexStopped)) throw error;
-    }
-  }
-  const installed = "/Applications/Hex.app/Contents/MacOS/hex";
-  const { hexPath } = getPreferenceValues<{ hexPath: string }>();
-  if (hexPath && hexPath !== installed && (await realpath(hexPath)) !== (await realpath(installed)))
-    throw new Error("Rename Meeting requires the installed Hex.app CLI.");
-  const instance = await lockHistory(library);
-  if (!instance)
-    throw new Error(
-      native
-        ? "Hex is using the library. Try saving again."
-        : "This Hex CLI has no live rename command. Save after Hex closes.",
-    );
-  try {
-    await writeTitle(library, selected, name, signal);
+    // After dispatch, dismissing the form cannot cancel the operation inside Hex.
+    await renameWithHex(executable, selected.id, name, root);
   } finally {
-    await instance.close();
+    await request.close();
   }
 }
 
@@ -86,8 +93,9 @@ async function readSnapshot(root: string, selected: Meeting) {
   return { directory, path, read, bytes, original, data: stored.data };
 }
 
-async function verifySelection(root: string, selected: Meeting, stored?: z.infer<typeof manifest>) {
-  const { meetings } = await readMeetings(root);
+async function verifySelection(library: MeetingLibrary, selected: Meeting, stored?: z.infer<typeof manifest>) {
+  const { root, executable } = library;
+  const { meetings } = await readMeetings(root, executable);
   const current = meetings.find((meeting) => meeting.id === selected.id);
   if (!current || current.timestamp_ms !== selected.timestamp_ms) throw new Error(changed);
   if (!canRenameMeeting(current)) throw new Error("Wait for recording and transcription to finish, then save again.");
@@ -101,9 +109,10 @@ async function verifySelection(root: string, selected: Meeting, stored?: z.infer
   }
 }
 
-async function writeTitle(root: string, selected: Meeting, name: string, signal: AbortSignal) {
+async function writeTitle(library: MeetingLibrary, selected: Meeting, name: string, signal: AbortSignal) {
+  const { root } = library;
   const { directory, path, read, bytes, original, data } = await readSnapshot(root, selected);
-  await verifySelection(root, selected, data);
+  await verifySelection(library, selected, data);
   if (data.title === name && data.title_source === "user") return;
 
   const lock = await open(

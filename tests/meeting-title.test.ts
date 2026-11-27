@@ -3,12 +3,23 @@ import { mkdir, mkdtemp, open, readFile, realpath, rm, stat, symlink, writeFile 
 import { constants } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listRecordings, renameMeeting } from "../src/meeting-title";
-import { readMeetings, renameWithHex, supportsMeetingRename, type Meeting } from "../src/hex";
+import { listRecordings, renameMeeting, type MeetingLibrary } from "../src/meeting-title";
+import { readMeetings, renameWithHex, resolveHexExecutable, supportsMeetingRename, type Meeting } from "../src/hex";
 import { HexStopped } from "../src/cli";
 
-vi.mock("@raycast/api", () => ({ getPreferenceValues: () => ({}) }));
-vi.mock("../src/hex", () => ({ readMeetings: vi.fn(), supportsMeetingRename: vi.fn(), renameWithHex: vi.fn() }));
+vi.mock("@raycast/api", () => ({
+  environment: {
+    get supportPath() {
+      return temp;
+    },
+  },
+}));
+vi.mock("../src/hex", () => ({
+  readMeetings: vi.fn(),
+  resolveHexExecutable: vi.fn(),
+  supportsMeetingRename: vi.fn(),
+  renameWithHex: vi.fn(),
+}));
 const temp = await mkdtemp(join(tmpdir(), "raycast-title-"));
 afterAll(() => rm(temp, { recursive: true, force: true }));
 afterEach(() => {
@@ -16,7 +27,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 const signal = new AbortController().signal;
-let library: string;
+let library: MeetingLibrary;
 const selected: Meeting = {
   id: "123-1",
   timestamp_ms: 123,
@@ -29,7 +40,8 @@ const selected: Meeting = {
 async function fixture() {
   const root = await mkdtemp(join(temp, "hex-"));
   vi.stubEnv("HEX_APPLICATION_SUPPORT_DIR", root);
-  library = await realpath(root);
+  library = { root: await realpath(root), executable: "/Applications/Hex.app/Contents/MacOS/hex" };
+  vi.mocked(resolveHexExecutable).mockResolvedValue(library.executable);
   await writeFile(join(root, "listener.lock"), "");
   const dir = join(root, "meetings", selected.id);
   await mkdir(dir, { recursive: true });
@@ -147,39 +159,68 @@ it("dispatches a supported live rename while Hex owns the library", async () => 
   vi.mocked(supportsMeetingRename).mockResolvedValue(true);
   try {
     await renameMeeting(selected, "  Live edit  ", signal, library);
-    expect(renameWithHex).toHaveBeenCalledExactlyOnceWith(selected.id, "Live edit", library, signal);
+    expect(renameWithHex).toHaveBeenCalledExactlyOnceWith(library.executable, selected.id, "Live edit", library.root);
     expect(await readFile(path, "utf8")).toBe(original);
   } finally {
     await native.close();
   }
 });
 
-it("preserves the recording when the native command refuses, even if the library lock is available", async () => {
-  const { path, original } = await fixture();
+it.each([new Error("Hex is finishing meeting notes."), new HexStopped(), new Error("Invalid reply")])(
+  "never falls back to a file write after a native error: %s",
+  async (error) => {
+    const { root, path, original } = await fixture();
+    const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
+    vi.mocked(supportsMeetingRename).mockResolvedValue(true);
+    vi.mocked(renameWithHex).mockImplementationOnce(async () => {
+      await native.close();
+      throw error;
+    });
+    try {
+      await expect(renameMeeting(selected, "Live edit", signal, library)).rejects.toThrow(error.message);
+      expect(await readFile(path, "utf8")).toBe(original);
+    } finally {
+      await native.close();
+    }
+  },
+);
+
+it("saves in the selected offline library even if it contains a copied discovery file", async () => {
+  const { root, path } = await fixture();
+  await writeFile(join(root, "local-api.json"), JSON.stringify({ pid: process.pid, port: 41234 }));
   vi.mocked(supportsMeetingRename).mockResolvedValue(true);
-  vi.mocked(renameWithHex).mockRejectedValueOnce(new Error("Hex is finishing meeting notes."));
-  await expect(renameMeeting(selected, "Live edit", signal, library)).rejects.toThrow("finishing meeting notes");
-  expect(await readFile(path, "utf8")).toBe(original);
+  await renameMeeting(selected, "Offline edit", signal, library);
+  expect(renameWithHex).not.toHaveBeenCalled();
+  expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ title: "Offline edit", title_source: "user" });
 });
 
-it("checks the selected title again before sending a live rename", async () => {
+it("rejects a switched CLI before sending the selected recording ID", async () => {
   await fixture();
-  vi.mocked(supportsMeetingRename).mockResolvedValue(true);
-  vi.mocked(readMeetings).mockResolvedValueOnce({
-    version: 1,
-    truncated: false,
-    meetings: [{ ...selected, title: "Changed in Hex" }],
-  });
-  await expect(renameMeeting(selected, "Live edit", signal, library)).rejects.toThrow("meeting changed");
+  vi.mocked(resolveHexExecutable).mockResolvedValueOnce("/other/profile/hex");
+  await expect(renameMeeting(selected, "Wrong profile", signal, library)).rejects.toThrow("library changed");
   expect(renameWithHex).not.toHaveBeenCalled();
 });
 
-it("can save offline if a capable CLI reports that Hex has stopped", async () => {
-  const { path } = await fixture();
+it("serializes live saves and rejects an edit that has gone stale in the meantime", async () => {
+  const { root } = await fixture();
+  const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
   vi.mocked(supportsMeetingRename).mockResolvedValue(true);
-  vi.mocked(renameWithHex).mockRejectedValueOnce(new HexStopped());
-  await renameMeeting(selected, "Offline edit", signal, library);
-  expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ title: "Offline edit", title_source: "user" });
+  vi.mocked(renameWithHex).mockImplementationOnce(async () => {
+    await expect(renameMeeting(selected, "Second", signal, library)).rejects.toThrow("Another rename");
+    vi.mocked(readMeetings).mockResolvedValue({
+      version: 1,
+      truncated: false,
+      meetings: [{ ...selected, title: "First" }],
+    });
+    return { version: 4, status: "done", message: "Renamed", changed: true };
+  });
+  try {
+    await renameMeeting(selected, "First", signal, library);
+    await expect(renameMeeting(selected, "Second", signal, library)).rejects.toThrow("meeting changed");
+    expect(renameWithHex).toHaveBeenCalledOnce();
+  } finally {
+    await native.close();
+  }
 });
 
 it("can save a draft opened during transcription once the current recording is finished", async () => {
@@ -216,7 +257,7 @@ it("keeps the selected library bound to the recording when the configured folder
   const first = await fixture();
   const selection = await listRecordings();
   const second = await fixture();
-  expect(selection.library).toBe(await realpath(first.root));
+  expect(selection.library?.root).toBe(await realpath(first.root));
   await expect(renameMeeting(selected, "Another title", signal, selection.library!)).rejects.toThrow("library changed");
   expect(await readFile(first.path, "utf8")).toBe(first.original);
   expect(await readFile(second.path, "utf8")).toBe(second.original);

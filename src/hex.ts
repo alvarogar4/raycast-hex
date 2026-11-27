@@ -1,5 +1,6 @@
 import { getPreferenceValues } from "@raycast/api";
 import { execFile } from "node:child_process";
+import { realpath } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { executeHex } from "./cli";
@@ -153,9 +154,15 @@ const meeting = z.object({
 });
 export type Meeting = z.infer<typeof meeting>;
 
-export async function supportsMeetingRename(signal: AbortSignal): Promise<boolean> {
+export async function resolveHexExecutable() {
   const executable = hexExecutable();
   if (!isAbsolute(executable)) throw new Error("Set an absolute Hex CLI path in extension preferences.");
+  return realpath(executable).catch(() => {
+    throw new Error("Could not find the configured Hex CLI. Check the executable path in extension preferences.");
+  });
+}
+
+export async function supportsMeetingRename(executable: string, signal: AbortSignal): Promise<boolean> {
   return new Promise((resolve, reject) => {
     execFile(executable, ["meetings", "rename", "--help"], { signal, encoding: "utf8" }, (error, _stdout, stderr) => {
       if (!error) return resolve(true);
@@ -165,15 +172,16 @@ export async function supportsMeetingRename(signal: AbortSignal): Promise<boolea
   });
 }
 
-export function renameWithHex(id: string, title: string, library: string, signal: AbortSignal) {
-  return hex(["meetings", "rename", "--json", "--", id, title], done, signal, {
+export function renameWithHex(executable: string, id: string, title: string, library: string) {
+  return executeHex(executable, ["meetings", "rename", "--json", "--", id, title], done, undefined, {
     ...process.env,
     HEX_APPLICATION_SUPPORT_DIR: library,
   });
 }
 
-export function readMeetings(library?: string) {
-  return hex(
+export function readMeetings(library?: string, executable = hexExecutable()) {
+  return executeHex(
+    executable,
     ["meetings", "list", "--json", "--limit", "200"],
     z.object({
       version: v1,
