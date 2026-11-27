@@ -1,9 +1,10 @@
-import { Action, ActionPanel, Icon, List } from "@raycast/api";
+import { Action, ActionPanel, Icon, Keyboard, List } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { inlineErrors, ReadError, RefreshAction } from "./feedback";
 import { type Meeting, readMeetings } from "./hex";
 import { runMeetingControl } from "./meeting-controls";
 import { OpenPaneAction } from "./open-pane-action";
+import { RenameMeetingForm } from "./rename-meeting";
 import { trashMeeting } from "./trash-meeting";
 
 export default function Meetings() {
@@ -28,6 +29,14 @@ export default function Meetings() {
           revalidate();
         }}
       />
+      {meeting && !meeting.in_progress && !["starting", "recording", "transcribing"].includes(meeting.status) && (
+        <Action.Push
+          title="Rename Meeting"
+          icon={Icon.Pencil}
+          shortcut={Keyboard.Shortcut.Common.Edit}
+          target={<RenameMeetingForm meeting={meeting} refresh={revalidate} />}
+        />
+      )}
       <RefreshAction refresh={revalidate} />
       {meeting && (
         <ActionPanel.Section>

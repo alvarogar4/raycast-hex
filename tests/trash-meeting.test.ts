@@ -10,6 +10,7 @@ const ui = vi.hoisted(() => ({
   Action: Object.assign(() => null, { Style: { Destructive: "destructive" } }),
   ActionPanel: Object.assign(() => null, { Section: "actionSection" }),
   Alert: { ActionStyle: { Destructive: "destructive" } },
+  Keyboard: { Shortcut: { Common: { Edit: { modifiers: ["cmd"], key: "e" } } } },
   Icon: { Trash: "trash", Microphone: "mic", Stop: "stop" },
   List: Object.assign(() => null, { Item: "item", EmptyView: "empty", Section: "section" }),
   Toast: { Style: { Success: "success", Failure: "failure" } },
