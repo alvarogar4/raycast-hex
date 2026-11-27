@@ -1,10 +1,17 @@
 import { getPreferenceValues } from "@raycast/api";
+import { execFile } from "node:child_process";
+import { realpath } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { executeHex } from "./cli";
 
-function hex<T>(args: string[], schema: z.ZodType<T>, signal?: AbortSignal, env?: NodeJS.ProcessEnv) {
+function hexExecutable() {
   const { hexPath } = getPreferenceValues<{ hexPath: string }>();
-  return executeHex(hexPath || "/Applications/Hex.app/Contents/MacOS/hex", args, schema, signal, env);
+  return hexPath || "/Applications/Hex.app/Contents/MacOS/hex";
+}
+
+function hex<T>(args: string[], schema: z.ZodType<T>, signal?: AbortSignal, env?: NodeJS.ProcessEnv) {
+  return executeHex(hexExecutable(), args, schema, signal, env);
 }
 
 const v4 = z.literal(4);
@@ -147,15 +154,41 @@ const meeting = z.object({
 });
 export type Meeting = z.infer<typeof meeting>;
 
-export function readMeetings(library?: string) {
-  return hex(
+export async function resolveHexExecutable() {
+  const executable = hexExecutable();
+  if (!isAbsolute(executable)) throw new Error("Set an absolute Hex CLI path in extension preferences.");
+  return realpath(executable).catch(() => {
+    throw new Error("Could not find the configured Hex CLI. Check the executable path in extension preferences.");
+  });
+}
+
+export async function supportsMeetingRename(executable: string, signal: AbortSignal): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    execFile(executable, ["meetings", "rename", "--help"], { signal, encoding: "utf8" }, (error, _stdout, stderr) => {
+      if (!error) return resolve(true);
+      if (error.code === 2 && stderr.startsWith("error: unrecognized subcommand 'rename'")) return resolve(false);
+      reject(new Error("Could not check whether this Hex CLI supports meeting rename."));
+    });
+  });
+}
+
+export function renameWithHex(executable: string, id: string, title: string, library: string) {
+  return executeHex(executable, ["meetings", "rename", "--json", "--", id, title], done, undefined, {
+    ...process.env,
+    HEX_APPLICATION_SUPPORT_DIR: library,
+  });
+}
+
+export function readMeetings(library?: string, executable = hexExecutable(), signal?: AbortSignal) {
+  return executeHex(
+    executable,
     ["meetings", "list", "--json", "--limit", "200"],
     z.object({
       version: v1,
       truncated: z.boolean(),
       meetings: z.array(meeting),
     }),
-    undefined,
+    signal,
     library ? { ...process.env, HEX_APPLICATION_SUPPORT_DIR: library } : undefined,
   );
 }

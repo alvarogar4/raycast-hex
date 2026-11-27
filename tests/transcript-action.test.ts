@@ -13,8 +13,15 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("../src/feedback", () => mocks);
 vi.mock("../src/transcript-store", () => mocks);
-vi.mock("@raycast/api", () => ({ ...mocks, Toast: { Style: { Failure: "failure", Success: "success" } } }));
-vi.mock("node:fs/promises", () => ({ realpath: (path: string) => Promise.resolve(path) }));
+vi.mock("@raycast/api", () => ({
+  ...mocks,
+  environment: { supportPath: "/test/support" },
+  Toast: { Style: { Failure: "failure", Success: "success" } },
+}));
+vi.mock("node:fs/promises", () => ({
+  open: async () => ({ close: async () => {} }),
+  realpath: (path: string) => Promise.resolve(path),
+}));
 vi.mock("node:child_process", () => ({
   execFile: (_path: string, _args: string[], done: (error: null, result: { stdout: string }) => void) =>
     done(null, { stdout: mocks.version() }),

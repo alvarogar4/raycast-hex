@@ -1,7 +1,7 @@
 import { Action, ActionPanel, Form, useNavigation } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
 import type { Meeting } from "./hex";
-import { canRenameMeeting, renameMeeting } from "./meeting-title";
+import { canRenameMeeting, renameMeeting, type MeetingLibrary } from "./meeting-title";
 
 export function RenameMeetingForm({
   meeting,
@@ -10,7 +10,7 @@ export function RenameMeetingForm({
 }: {
   meeting: Meeting;
   refresh: () => void;
-  library: string;
+  library: MeetingLibrary;
 }) {
   const { pop } = useNavigation();
   const [error, setError] = useState<string>();
@@ -34,8 +34,8 @@ export function RenameMeetingForm({
       refresh();
       if (!save.signal.aborted) pop();
     } catch (error) {
+      refresh();
       if (!save.signal.aborted) {
-        refresh();
         setError(error instanceof Error ? error.message : "Could not rename this meeting.");
       }
     } finally {
@@ -69,8 +69,8 @@ export function RenameMeetingForm({
       <Form.Description
         text={
           canRenameMeeting(meeting)
-            ? "Save with Hex closed. If Hex is working on another meeting, let it finish first."
-            : "You can edit the title now. Once recording and transcription finish, quit Hex and save."
+            ? "Live rename requires the Hex CLI’s meetings rename command. With older versions, save after Hex closes."
+            : "You can edit the title now. Wait for recording and transcription to finish before saving."
         }
       />
     </Form>

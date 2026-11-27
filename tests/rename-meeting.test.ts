@@ -36,7 +36,7 @@ vi.mock("@raycast/api", () => ({
 vi.mock("@raycast/utils", () => ({ usePromise: ui.usePromise }));
 afterEach(() => vi.clearAllMocks());
 
-const library = "/test/library";
+const library = { root: "/test/library", executable: "/test/hex" };
 const meeting: Meeting = {
   id: "first",
   title: "Weekly sync",
@@ -74,7 +74,7 @@ it("opens a prefilled Raycast form for exactly the selected row and returns to t
   expect(action.props.target.type).toBe(RenameMeetingForm);
   const form = RenameMeetingForm(action.props.target.props);
   expect(form.props.children[0].props.value).toBe(second.title);
-  expect(form.props.children[1].props.text).toContain("Save with Hex closed");
+  expect(form.props.children[1].props.text).toContain("meetings rename");
   await form.props.actions.props.children.props.onSubmit({ title: "  New title  " });
   expect(renameMeeting).toHaveBeenCalledExactlyOnceWith(second, "New title", expect.any(AbortSignal), library);
   expect(refresh).toHaveBeenCalledOnce();
@@ -106,7 +106,8 @@ it("keeps an old save from dismissing another form and ignores repeat submission
     complete = resolve;
   });
   vi.mocked(renameMeeting).mockReturnValueOnce(promise);
-  const form = RenameMeetingForm({ meeting, library, refresh: vi.fn() });
+  const refresh = vi.fn();
+  const form = RenameMeetingForm({ meeting, library, refresh });
   const submit = form.props.actions.props.children.props.onSubmit;
   const save = submit({ title: "First change" });
   form.props.children[0].props.onChange("Unsubmitted correction");
@@ -117,5 +118,6 @@ it("keeps an old save from dismissing another form and ignores repeat submission
   unmount();
   complete();
   await save;
+  expect(refresh).toHaveBeenCalledOnce();
   expect(ui.pop).not.toHaveBeenCalled();
 });

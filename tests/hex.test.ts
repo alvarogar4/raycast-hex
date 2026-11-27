@@ -5,7 +5,15 @@ import { afterAll, afterEach, expect, it, vi } from "vitest";
 import { LaunchType } from "@raycast/api";
 import { z } from "zod";
 import { executeHex, HexStopped } from "../src/cli";
-import { control, readHistory, readStatus, readMeetings } from "../src/hex";
+import {
+  control,
+  readHistory,
+  readStatus,
+  readMeetings,
+  supportsMeetingRename,
+  renameWithHex,
+  resolveHexExecutable,
+} from "../src/hex";
 import { cancelPreparation, chooseModel } from "../src/switch-model";
 import { runShortcut } from "../src/no-view";
 import StartMeeting from "../src/start-meeting";
@@ -45,6 +53,32 @@ function fixture(script: string) {
 }
 const echoDone =
   'process.stdout.write(JSON.stringify({version:4,status:"done",changed:true,message:JSON.stringify(process.argv.slice(2))}))';
+
+it("detects native rename support and sends the selected ID and title as literal arguments to the selected library", async () => {
+  const signal = new AbortController().signal;
+  const title = '--new "title" ☕';
+  fixture(`
+    const args = process.argv.slice(2);
+    const assert = require("node:assert/strict");
+    if (args.includes("--help")) {
+      assert.deepEqual(args, ["meetings", "rename", "--help"]);
+      process.exit(0);
+    }
+    assert.equal(process.env.HEX_APPLICATION_SUPPORT_DIR, "/selected/library");
+    ${echoDone}
+  `);
+  expect(await supportsMeetingRename(await resolveHexExecutable(), signal)).toBe(true);
+  const reply = await renameWithHex(await resolveHexExecutable(), "123-1", title, "/selected/library");
+  expect(JSON.parse(reply.message)).toEqual(["meetings", "rename", "--json", "--", "123-1", title]);
+});
+
+it("recognizes the legacy CLI and propagates unexpected probe failures", async () => {
+  const signal = new AbortController().signal;
+  fixture(`process.stderr.write("error: unrecognized subcommand 'rename'"); process.exit(2);`);
+  expect(await supportsMeetingRename(await resolveHexExecutable(), signal)).toBe(false);
+  fixture(`process.stderr.write("private diagnostic"); process.exit(2);`);
+  await expect(supportsMeetingRename(await resolveHexExecutable(), signal)).rejects.toThrow("Could not check");
+});
 
 it("passes private search and filter values as literal arguments and preserves entry text", async () => {
   const query = '--raw "two words"; $5';
