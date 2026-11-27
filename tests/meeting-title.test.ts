@@ -140,12 +140,26 @@ it("persists a generated title when the user explicitly saves it", async () => {
 
 it("can save a draft opened during transcription once the current recording is finished", async () => {
   const { path, original } = await fixture();
-  const transcribing = { ...selected, status: "transcribing", in_progress: true };
+  const transcribing = { ...selected, status: "transcribing", in_progress: true, title: "Provisional title" };
   vi.mocked(readMeetings).mockResolvedValueOnce({ version: 1, meetings: [transcribing], truncated: false });
   await expect(renameMeeting(transcribing, "My draft", signal, library)).rejects.toThrow("transcription");
   expect(await readFile(path, "utf8")).toBe(original);
   await renameMeeting(transcribing, "My draft", signal, library);
   expect(JSON.parse(await readFile(path, "utf8")).title).toBe("My draft");
+});
+
+it.each([undefined, "user"])("preserves a competing user rename with title_source %s", async (source) => {
+  const { path, original } = await fixture();
+  const transcribing = { ...selected, status: "transcribing", in_progress: true, title: "Provisional title" };
+  const updated = JSON.stringify({ ...JSON.parse(original), title: "Edited in Hex", title_source: source });
+  await writeFile(path, updated);
+  vi.mocked(readMeetings).mockResolvedValueOnce({
+    version: 1,
+    truncated: false,
+    meetings: [{ ...selected, title: "Edited in Hex" }],
+  });
+  await expect(renameMeeting(transcribing, "My draft", signal, library)).rejects.toThrow("meeting changed");
+  expect(await readFile(path, "utf8")).toBe(updated);
 });
 
 it("leaves the manifest intact after cancellation", async () => {

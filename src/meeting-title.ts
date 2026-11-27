@@ -67,9 +67,15 @@ async function writeTitle(root: string, selected: Meeting, name: string, signal:
     throw new Error("This recording is busy or its format has changed.");
   const { meetings } = await readMeetings(root);
   const current = meetings.find((meeting) => meeting.id === selected.id);
-  if (!current || current.timestamp_ms !== selected.timestamp_ms || current.title !== selected.title)
-    throw new Error(changed);
+  if (!current || current.timestamp_ms !== selected.timestamp_ms) throw new Error(changed);
   if (!canRenameMeeting(current)) throw new Error("Wait for recording and transcription to finish, then save again.");
+  if (current.title !== selected.title) {
+    const source = stored.data.title_source;
+    // Hex returns a user-provided title verbatim, including on recordings that predate title_source.
+    const generated =
+      source == null ? current.title !== stored.data.title : ["default", "call", "calendar"].includes(source);
+    if (canRenameMeeting(selected) || !generated) throw new Error(changed);
+  }
   if (stored.data.title === name && stored.data.title_source === "user") return;
 
   const lock = await open(
