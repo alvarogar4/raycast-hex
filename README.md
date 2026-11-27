@@ -41,9 +41,11 @@ Enable Meetings in Hex, then run **Start Meeting Recording**. Enter a title or l
 
 ### Renaming a meeting
 
-Select a recording in **Meetings** and press **⌘E**, or choose **Rename Meeting** in Actions. You can edit the prefilled title while the meeting is recording or transcribing. Once it finishes, quit Hex and press **⌘Return** in the form to save. If the library is busy, the form keeps your draft. **Escape** returns to the list and discards the edit. The new title appears in both Raycast and Hex.
+Select a recording in **Meetings** and press **⌘E**, or choose **Rename Meeting** in Actions. Edit the title and press **⌘Return** after recording and transcription finish. **Escape** discards the draft.
 
-Hex 3.5.0 has no rename CLI command. The extension updates the saved recording’s title and marks it as user-provided, so it takes precedence over generated titles. Previously exported Markdown files keep their original names and headings. Checked against Hex 3.5.0 on November 27, 2026. [Hex title resolution](https://github.com/anomalyco/hex/blob/v3.5.0/src/meeting/notes.rs#L415-L448)
+On each save, Raycast checks the configured CLI for `hex meetings rename`. If supported, Raycast asks the running Hex app to rename the recording and refreshes the list on success. The command is proposed in [Hex issue #2948](https://github.com/anomalyco/hex/issues/2948).
+
+Hex 3.5.0 lacks this command. With that version, quit Hex before saving. The offline save updates the recording’s user-provided title and preserves existing Markdown exports. If Hex has the library open, Raycast keeps your draft. [Hex title resolution](https://github.com/anomalyco/hex/blob/v3.5.0/src/meeting/notes.rs#L415-L448)
 
 ### Deleting a meeting
 
@@ -63,7 +65,7 @@ In Finder’s Trash, the **Hex Transcript** folder for the selected ID contains 
 
 - Hex 3.4.0 has no JSON command for enumerating input microphones. Its microphone setting accepts the exact device name or the system default.
 - `meetings search` returns human-readable text only. The extension searches metadata from `meetings list --json`. Full-text transcript and note search is available in the Hex CLI. The pane-opening command opens the whole pane.
-- **Rename Meeting** edits the local recording manifest. **Move Transcript to Trash** archives the selected dictation before updating the shared history file. **Move Meeting to Trash** uses Hex’s native CLI command.
+- **Rename Meeting** uses Hex’s native command when available and can edit the local recording manifest when Hex is closed. **Move Transcript to Trash** archives the selected dictation before updating the shared history file. **Move Meeting to Trash** uses Hex’s native CLI command.
 - All other reads and controls invoke the configured executable with an argument array. History stays in memory while the view is open. The extension makes no network requests, sends no telemetry, and does not log dictation text. The two copy actions mark clipboard content as concealed. A confirmed model installation asks Hex to download the model.
 - When Hex is closed, history and recorded meetings remain readable through the CLI. Controls offer **Start Hex**. After starting it, invoke the intended action again.
 

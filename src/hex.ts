@@ -1,10 +1,16 @@
 import { getPreferenceValues } from "@raycast/api";
+import { execFile } from "node:child_process";
+import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { executeHex } from "./cli";
 
-function hex<T>(args: string[], schema: z.ZodType<T>, signal?: AbortSignal, env?: NodeJS.ProcessEnv) {
+function hexExecutable() {
   const { hexPath } = getPreferenceValues<{ hexPath: string }>();
-  return executeHex(hexPath || "/Applications/Hex.app/Contents/MacOS/hex", args, schema, signal, env);
+  return hexPath || "/Applications/Hex.app/Contents/MacOS/hex";
+}
+
+function hex<T>(args: string[], schema: z.ZodType<T>, signal?: AbortSignal, env?: NodeJS.ProcessEnv) {
+  return executeHex(hexExecutable(), args, schema, signal, env);
 }
 
 const v4 = z.literal(4);
@@ -146,6 +152,25 @@ const meeting = z.object({
   in_progress: z.boolean(),
 });
 export type Meeting = z.infer<typeof meeting>;
+
+export async function supportsMeetingRename(signal: AbortSignal): Promise<boolean> {
+  const executable = hexExecutable();
+  if (!isAbsolute(executable)) throw new Error("Set an absolute Hex CLI path in extension preferences.");
+  return new Promise((resolve, reject) => {
+    execFile(executable, ["meetings", "rename", "--help"], { signal, encoding: "utf8" }, (error, _stdout, stderr) => {
+      if (!error) return resolve(true);
+      if (error.code === 2 && stderr.startsWith("error: unrecognized subcommand 'rename'")) return resolve(false);
+      reject(new Error("Could not check whether this Hex CLI supports meeting rename."));
+    });
+  });
+}
+
+export function renameWithHex(id: string, title: string, library: string, signal: AbortSignal) {
+  return hex(["meetings", "rename", "--json", "--", id, title], done, signal, {
+    ...process.env,
+    HEX_APPLICATION_SUPPORT_DIR: library,
+  });
+}
 
 export function readMeetings(library?: string) {
   return hex(

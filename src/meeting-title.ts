@@ -6,7 +6,8 @@ import { lstat, open, readFile, realpath, rename, rm, writeFile } from "node:fs/
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { z } from "zod";
-import { type Meeting, readMeetings } from "./hex";
+import { HexStopped } from "./cli";
+import { type Meeting, readMeetings, renameWithHex, supportsMeetingRename } from "./hex";
 import { lockHistory } from "./transcript-store";
 
 const manifest = z.object({
@@ -41,13 +42,30 @@ export async function renameMeeting(selected: Meeting, title: string, signal: Ab
   if (!name) throw new Error("Enter a meeting title.");
   if (!selected.id || selected.id === "." || selected.id === ".." || /[\\/\0]/.test(selected.id))
     throw new Error("Invalid Hex meeting ID.");
+  if ((await libraryPath()) !== library) throw new Error("The Hex library changed. Reopen Meetings and try again.");
+  signal.throwIfAborted();
+  const native = await supportsMeetingRename(signal);
+  if (native) {
+    await verifySelection(library, selected);
+    signal.throwIfAborted();
+    try {
+      await renameWithHex(selected.id, name, library, signal);
+      return;
+    } catch (error) {
+      if (!(error instanceof HexStopped)) throw error;
+    }
+  }
   const installed = "/Applications/Hex.app/Contents/MacOS/hex";
   const { hexPath } = getPreferenceValues<{ hexPath: string }>();
   if (hexPath && hexPath !== installed && (await realpath(hexPath)) !== (await realpath(installed)))
     throw new Error("Rename Meeting requires the installed Hex.app CLI.");
-  if ((await libraryPath()) !== library) throw new Error("The Hex library changed. Reopen Meetings and try again.");
   const instance = await lockHistory(library);
-  if (!instance) throw new Error("Hex is using the library. Save again after Hex closes.");
+  if (!instance)
+    throw new Error(
+      native
+        ? "Hex is using the library. Try saving again."
+        : "This Hex CLI has no live rename command. Save after Hex closes.",
+    );
   try {
     await writeTitle(library, selected, name, signal);
   } finally {
@@ -55,7 +73,7 @@ export async function renameMeeting(selected: Meeting, title: string, signal: Ab
   }
 }
 
-async function writeTitle(root: string, selected: Meeting, name: string, signal: AbortSignal) {
+async function readSnapshot(root: string, selected: Meeting) {
   const directory = join(root, "meetings", selected.id);
   if ((await realpath(directory)) !== directory) throw new Error("The meeting folder is a symbolic link.");
   const path = join(directory, "manifest.json");
@@ -65,18 +83,28 @@ async function writeTitle(root: string, selected: Meeting, name: string, signal:
   const stored = manifest.safeParse(JSON.parse(original));
   if (!stored.success || stored.data.id !== selected.id || stored.data.created_at_ms !== selected.timestamp_ms)
     throw new Error("This recording is busy or its format has changed.");
+  return { directory, path, read, bytes, original, data: stored.data };
+}
+
+async function verifySelection(root: string, selected: Meeting, stored?: z.infer<typeof manifest>) {
   const { meetings } = await readMeetings(root);
   const current = meetings.find((meeting) => meeting.id === selected.id);
   if (!current || current.timestamp_ms !== selected.timestamp_ms) throw new Error(changed);
   if (!canRenameMeeting(current)) throw new Error("Wait for recording and transcription to finish, then save again.");
   if (current.title !== selected.title) {
-    const source = stored.data.title_source;
+    if (canRenameMeeting(selected)) throw new Error(changed);
+    const data = stored ?? (await readSnapshot(root, selected)).data;
+    const source = data.title_source;
     // Hex returns a user-provided title verbatim, including on recordings that predate title_source.
-    const generated =
-      source == null ? current.title !== stored.data.title : ["default", "call", "calendar"].includes(source);
-    if (canRenameMeeting(selected) || !generated) throw new Error(changed);
+    const generated = source == null ? current.title !== data.title : ["default", "call", "calendar"].includes(source);
+    if (!generated) throw new Error(changed);
   }
-  if (stored.data.title === name && stored.data.title_source === "user") return;
+}
+
+async function writeTitle(root: string, selected: Meeting, name: string, signal: AbortSignal) {
+  const { directory, path, read, bytes, original, data } = await readSnapshot(root, selected);
+  await verifySelection(root, selected, data);
+  if (data.title === name && data.title_source === "user") return;
 
   const lock = await open(
     join(directory, "active.lock"),

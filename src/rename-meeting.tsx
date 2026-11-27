@@ -69,8 +69,8 @@ export function RenameMeetingForm({
       <Form.Description
         text={
           canRenameMeeting(meeting)
-            ? "Save with Hex closed. If Hex is working on another meeting, let it finish first."
-            : "You can edit the title now. Once recording and transcription finish, quit Hex and save."
+            ? "Live rename requires the Hex CLI’s meetings rename command. With older versions, save after Hex closes."
+            : "You can edit the title now. Wait for recording and transcription to finish before saving."
         }
       />
     </Form>

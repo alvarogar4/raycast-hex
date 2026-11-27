@@ -74,7 +74,7 @@ it("opens a prefilled Raycast form for exactly the selected row and returns to t
   expect(action.props.target.type).toBe(RenameMeetingForm);
   const form = RenameMeetingForm(action.props.target.props);
   expect(form.props.children[0].props.value).toBe(second.title);
-  expect(form.props.children[1].props.text).toContain("Save with Hex closed");
+  expect(form.props.children[1].props.text).toContain("meetings rename");
   await form.props.actions.props.children.props.onSubmit({ title: "  New title  " });
   expect(renameMeeting).toHaveBeenCalledExactlyOnceWith(second, "New title", expect.any(AbortSignal), library);
   expect(refresh).toHaveBeenCalledOnce();

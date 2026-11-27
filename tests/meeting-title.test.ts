@@ -4,10 +4,11 @@ import { constants } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listRecordings, renameMeeting } from "../src/meeting-title";
-import { readMeetings, type Meeting } from "../src/hex";
+import { readMeetings, renameWithHex, supportsMeetingRename, type Meeting } from "../src/hex";
+import { HexStopped } from "../src/cli";
 
 vi.mock("@raycast/api", () => ({ getPreferenceValues: () => ({}) }));
-vi.mock("../src/hex", () => ({ readMeetings: vi.fn() }));
+vi.mock("../src/hex", () => ({ readMeetings: vi.fn(), supportsMeetingRename: vi.fn(), renameWithHex: vi.fn() }));
 const temp = await mkdtemp(join(tmpdir(), "raycast-title-"));
 afterAll(() => rm(temp, { recursive: true, force: true }));
 afterEach(() => {
@@ -37,6 +38,7 @@ async function fixture() {
     '{"schema_version":1,"id":"123-1","created_at_ms":123,"status":"complete","title":"Default","notes":{"title":"Generated title"},"samples":18446744073709551615}';
   await writeFile(path, original);
   vi.mocked(readMeetings).mockResolvedValue({ meetings: [selected], truncated: false, version: 1 });
+  vi.mocked(supportsMeetingRename).mockResolvedValue(false);
   return { dir, path, original, root };
 }
 
@@ -123,7 +125,8 @@ it("leaves native notes intact while Hex owns the instance lock and allows savin
   const { root, path, original } = await fixture();
   const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
   try {
-    await expect(renameMeeting(selected, "New title", signal, library)).rejects.toThrow("using the library");
+    await expect(renameMeeting(selected, "New title", signal, library)).rejects.toThrow("no live rename command");
+    expect(renameWithHex).not.toHaveBeenCalled();
     await writeFile(path, original.replace('"Generated title"', '"New notes"'));
   } finally {
     await native.close();
@@ -136,6 +139,47 @@ it("persists a generated title when the user explicitly saves it", async () => {
   const { path } = await fixture();
   await renameMeeting(selected, selected.title, signal, library);
   expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ title: selected.title, title_source: "user" });
+});
+
+it("dispatches a supported live rename while Hex owns the library", async () => {
+  const { root, path, original } = await fixture();
+  const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
+  vi.mocked(supportsMeetingRename).mockResolvedValue(true);
+  try {
+    await renameMeeting(selected, "  Live edit  ", signal, library);
+    expect(renameWithHex).toHaveBeenCalledExactlyOnceWith(selected.id, "Live edit", library, signal);
+    expect(await readFile(path, "utf8")).toBe(original);
+  } finally {
+    await native.close();
+  }
+});
+
+it("preserves the recording when the native command refuses, even if the library lock is available", async () => {
+  const { path, original } = await fixture();
+  vi.mocked(supportsMeetingRename).mockResolvedValue(true);
+  vi.mocked(renameWithHex).mockRejectedValueOnce(new Error("Hex is finishing meeting notes."));
+  await expect(renameMeeting(selected, "Live edit", signal, library)).rejects.toThrow("finishing meeting notes");
+  expect(await readFile(path, "utf8")).toBe(original);
+});
+
+it("checks the selected title again before sending a live rename", async () => {
+  await fixture();
+  vi.mocked(supportsMeetingRename).mockResolvedValue(true);
+  vi.mocked(readMeetings).mockResolvedValueOnce({
+    version: 1,
+    truncated: false,
+    meetings: [{ ...selected, title: "Changed in Hex" }],
+  });
+  await expect(renameMeeting(selected, "Live edit", signal, library)).rejects.toThrow("meeting changed");
+  expect(renameWithHex).not.toHaveBeenCalled();
+});
+
+it("can save offline if a capable CLI reports that Hex has stopped", async () => {
+  const { path } = await fixture();
+  vi.mocked(supportsMeetingRename).mockResolvedValue(true);
+  vi.mocked(renameWithHex).mockRejectedValueOnce(new HexStopped());
+  await renameMeeting(selected, "Offline edit", signal, library);
+  expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ title: "Offline edit", title_source: "user" });
 });
 
 it("can save a draft opened during transcription once the current recording is finished", async () => {
