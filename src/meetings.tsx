@@ -1,14 +1,15 @@
 import { Action, ActionPanel, Icon, Keyboard, List } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { inlineErrors, ReadError, RefreshAction } from "./feedback";
-import { type Meeting, readMeetings } from "./hex";
+import type { Meeting } from "./hex";
+import { canRenameMeeting, listRecordings } from "./meeting-title";
 import { runMeetingControl } from "./meeting-controls";
 import { OpenPaneAction } from "./open-pane-action";
 import { RenameMeetingForm } from "./rename-meeting";
 import { trashMeeting } from "./trash-meeting";
 
 export default function Meetings() {
-  const { data, error, isLoading, revalidate } = usePromise(readMeetings, [], inlineErrors);
+  const { data, error, isLoading, revalidate } = usePromise(listRecordings, [], inlineErrors);
   if (error) return <ReadError error={error} retry={revalidate} />;
   const actions = (meeting?: Meeting) => (
     <ActionPanel>
@@ -29,12 +30,12 @@ export default function Meetings() {
           revalidate();
         }}
       />
-      {meeting && !meeting.in_progress && !["starting", "recording", "transcribing"].includes(meeting.status) && (
+      {data?.library && meeting && canRenameMeeting(meeting) && (
         <Action.Push
           title="Rename Meeting"
           icon={Icon.Pencil}
           shortcut={Keyboard.Shortcut.Common.Edit}
-          target={<RenameMeetingForm meeting={meeting} refresh={revalidate} />}
+          target={<RenameMeetingForm meeting={meeting} refresh={revalidate} library={data.library} />}
         />
       )}
       <RefreshAction refresh={revalidate} />

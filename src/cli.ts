@@ -27,11 +27,12 @@ export async function executeHex<T>(
   args: string[],
   schema: z.ZodType<T>,
   signal?: AbortSignal,
+  env?: NodeJS.ProcessEnv,
 ): Promise<T> {
   if (!isAbsolute(path)) throw new Error("Set an absolute Hex CLI path in extension preferences.");
   return new Promise((resolve, reject) => {
     // Never propagate a child_process error: its message contains argv and can include private text.
-    execFile(path, args, { signal, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
+    execFile(path, args, { signal, env, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }, (error, stdout) => {
       if (error?.code === 3) return reject(new HexStopped());
       const json = parse(stdout);
       if (error) {

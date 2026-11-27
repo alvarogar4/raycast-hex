@@ -3,10 +3,19 @@ import { useEffect, useRef, useState } from "react";
 import type { Meeting } from "./hex";
 import { renameMeeting } from "./meeting-title";
 
-export function RenameMeetingForm({ meeting, refresh }: { meeting: Meeting; refresh: () => void }) {
+export function RenameMeetingForm({
+  meeting,
+  refresh,
+  library,
+}: {
+  meeting: Meeting;
+  refresh: () => void;
+  library: string;
+}) {
   const { pop } = useNavigation();
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState(meeting.title);
   const pending = useRef<AbortController | null>(null);
   useEffect(() => () => pending.current?.abort(), []);
 
@@ -21,7 +30,7 @@ export function RenameMeetingForm({ meeting, refresh }: { meeting: Meeting; refr
     pending.current = save;
     setSaving(true);
     try {
-      if (!(await renameMeeting(meeting, name, save.signal))) return;
+      await renameMeeting(meeting, name, save.signal, library);
       refresh();
       if (!save.signal.aborted) pop();
     } catch (error) {
@@ -48,10 +57,14 @@ export function RenameMeetingForm({ meeting, refresh }: { meeting: Meeting; refr
       <Form.TextField
         id="title"
         title="Meeting Title"
-        defaultValue={meeting.title}
+        value={draft}
         autoFocus
         error={error}
-        onChange={() => setError(undefined)}
+        onChange={(text) => {
+          if (pending.current) return;
+          setDraft(text);
+          setError(undefined);
+        }}
       />
     </Form>
   );

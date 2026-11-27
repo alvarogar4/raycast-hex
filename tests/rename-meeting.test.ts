@@ -4,11 +4,23 @@ import { RenameMeetingForm } from "../src/rename-meeting";
 import { renameMeeting } from "../src/meeting-title";
 import type { Meeting } from "../src/hex";
 
-const ui = vi.hoisted(() => ({ pop: vi.fn(), setError: vi.fn(), usePromise: vi.fn(), effect: vi.fn() }));
-vi.mock("../src/meeting-title", () => ({ renameMeeting: vi.fn() }));
+const ui = vi.hoisted(() => ({
+  pop: vi.fn(),
+  setError: vi.fn(),
+  setDraft: vi.fn(),
+  usePromise: vi.fn(),
+  effect: vi.fn(),
+}));
+vi.mock("../src/meeting-title", async (original) => ({
+  ...(await original<typeof import("../src/meeting-title")>()),
+  renameMeeting: vi.fn(),
+}));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
-  useState: (initial: unknown) => [initial, typeof initial === "boolean" ? vi.fn() : ui.setError],
+  useState: (initial: unknown) => [
+    initial,
+    typeof initial === "string" ? ui.setDraft : typeof initial === "boolean" ? vi.fn() : ui.setError,
+  ],
   useRef: () => ({ current: null }),
   useEffect: ui.effect,
 }));
@@ -24,6 +36,7 @@ vi.mock("@raycast/api", () => ({
 vi.mock("@raycast/utils", () => ({ usePromise: ui.usePromise }));
 afterEach(() => vi.clearAllMocks());
 
+const library = "/test/library";
 const meeting: Meeting = {
   id: "first",
   title: "Weekly sync",
@@ -38,6 +51,7 @@ it("opens a prefilled Raycast form for exactly the selected row and returns to t
   const refresh = vi.fn();
   ui.usePromise.mockReturnValue({
     data: {
+      library,
       meetings: [
         meeting,
         second,
@@ -59,10 +73,9 @@ it("opens a prefilled Raycast form for exactly the selected row and returns to t
   expect(action.props.shortcut).toEqual({ modifiers: ["cmd"], key: "e" });
   expect(action.props.target.type).toBe(RenameMeetingForm);
   const form = RenameMeetingForm(action.props.target.props);
-  expect(form.props.children.props.defaultValue).toBe(second.title);
-  vi.mocked(renameMeeting).mockResolvedValueOnce(true);
+  expect(form.props.children.props.value).toBe(second.title);
   await form.props.actions.props.children.props.onSubmit({ title: "  New title  " });
-  expect(renameMeeting).toHaveBeenCalledExactlyOnceWith(second, "New title", expect.any(AbortSignal));
+  expect(renameMeeting).toHaveBeenCalledExactlyOnceWith(second, "New title", expect.any(AbortSignal), library);
   expect(refresh).toHaveBeenCalledOnce();
   expect(ui.pop).toHaveBeenCalledOnce();
   expect(rename(active)).toBeUndefined();
@@ -72,7 +85,7 @@ it("opens a prefilled Raycast form for exactly the selected row and returns to t
 
 it("keeps a blank or rejected edit in the form", async () => {
   const refresh = vi.fn();
-  const submit = RenameMeetingForm({ meeting, refresh }).props.actions.props.children.props.onSubmit;
+  const submit = RenameMeetingForm({ meeting, library, refresh }).props.actions.props.children.props.onSubmit;
   await submit({ title: "   " });
   expect(renameMeeting).not.toHaveBeenCalled();
   expect(ui.setError).toHaveBeenCalledWith("Enter a meeting title.");
@@ -83,27 +96,22 @@ it("keeps a blank or rejected edit in the form", async () => {
   expect(ui.pop).not.toHaveBeenCalled();
 });
 
-it("keeps the draft open when the user cancels the quit confirmation", async () => {
-  const refresh = vi.fn();
-  vi.mocked(renameMeeting).mockResolvedValueOnce(false);
-  await RenameMeetingForm({ meeting, refresh }).props.actions.props.children.props.onSubmit({ title: "New title" });
-  expect(ui.pop).not.toHaveBeenCalled();
-  expect(refresh).not.toHaveBeenCalled();
-});
-
 it("keeps an old save from dismissing another form and ignores repeat submissions", async () => {
-  let complete: (saved: boolean) => void = () => {};
-  const promise = new Promise<boolean>((resolve) => {
+  let complete: () => void = () => {};
+  const promise = new Promise<void>((resolve) => {
     complete = resolve;
   });
   vi.mocked(renameMeeting).mockReturnValueOnce(promise);
-  const submit = RenameMeetingForm({ meeting, refresh: vi.fn() }).props.actions.props.children.props.onSubmit;
+  const form = RenameMeetingForm({ meeting, library, refresh: vi.fn() });
+  const submit = form.props.actions.props.children.props.onSubmit;
   const save = submit({ title: "First change" });
+  form.props.children.props.onChange("Unsubmitted correction");
+  expect(ui.setDraft).not.toHaveBeenCalled();
   await submit({ title: "Second change" });
   expect(renameMeeting).toHaveBeenCalledTimes(1);
   const unmount = ui.effect.mock.lastCall![0]();
   unmount();
-  complete(true);
+  complete();
   await save;
   expect(ui.pop).not.toHaveBeenCalled();
 });

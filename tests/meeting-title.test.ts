@@ -1,14 +1,13 @@
 import { afterAll, afterEach, expect, it, vi } from "vitest";
-import { confirmAlert } from "@raycast/api";
-import { mkdir, mkdtemp, open, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { renameMeeting } from "../src/meeting-title";
-import { control, readMeetings, readStatus, type Meeting } from "../src/hex";
+import { listRecordings, renameMeeting } from "../src/meeting-title";
+import { readMeetings, type Meeting } from "../src/hex";
 
-vi.mock("@raycast/api", () => ({ confirmAlert: vi.fn(), getPreferenceValues: () => ({}) }));
-vi.mock("../src/hex", () => ({ readMeetings: vi.fn(), control: vi.fn(), readStatus: vi.fn() }));
+vi.mock("@raycast/api", () => ({ getPreferenceValues: () => ({}) }));
+vi.mock("../src/hex", () => ({ readMeetings: vi.fn() }));
 const temp = await mkdtemp(join(tmpdir(), "raycast-title-"));
 afterAll(() => rm(temp, { recursive: true, force: true }));
 afterEach(() => {
@@ -16,13 +15,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 const signal = new AbortController().signal;
-const idle = {
-  version: 4,
-  status: "status",
-  capture: { state: "idle", recording: null, pending_jobs: 0 },
-  meeting: { state: "idle", title: null, elapsed_seconds: null },
-  model: { id: "", name: "", language: "", preparing: null, error: null },
-} as const;
+let library: string;
 const selected: Meeting = {
   id: "123-1",
   timestamp_ms: 123,
@@ -35,6 +28,7 @@ const selected: Meeting = {
 async function fixture() {
   const root = await mkdtemp(join(temp, "hex-"));
   vi.stubEnv("HEX_APPLICATION_SUPPORT_DIR", root);
+  library = await realpath(root);
   await writeFile(join(root, "listener.lock"), "");
   const dir = join(root, "meetings", selected.id);
   await mkdir(dir, { recursive: true });
@@ -48,7 +42,7 @@ async function fixture() {
 
 it("sets a user title in the actual manifest and preserves unrelated fields and integer precision", async () => {
   const { path } = await fixture();
-  await renameMeeting(selected, '  --review "Monday" ☕  ', signal);
+  await renameMeeting(selected, '  --review "Monday" ☕  ', signal, library);
   const text = await readFile(path, "utf8");
   expect(JSON.parse(text)).toMatchObject({
     title: '--review "Monday" ☕',
@@ -97,7 +91,7 @@ it.each(["pending", "active", "deleted", "retitled", "format", "modified"])(
         });
         break;
     }
-    await expect(renameMeeting(selected, "new", signal)).rejects.toThrow();
+    await expect(renameMeeting(selected, "new", signal, library)).rejects.toThrow();
     expect(await readFile(path, "utf8")).toBe(expected);
   },
 );
@@ -110,7 +104,7 @@ it("honors the native active.lock even after a successful list read", async () =
     0o600,
   );
   try {
-    await expect(renameMeeting(selected, "Busy", signal)).rejects.toThrow("using this recording");
+    await expect(renameMeeting(selected, "Busy", signal, library)).rejects.toThrow("using this recording");
     expect(await readFile(path, "utf8")).toBe(original);
   } finally {
     await lock.close();
@@ -120,74 +114,54 @@ it("honors the native active.lock even after a successful list read", async () =
 it("refuses meeting folder redirects", async () => {
   const { dir, root } = await fixture();
   await symlink(dir, join(root, "meetings", "alias"));
-  await expect(renameMeeting({ ...selected, id: "alias" }, "Different", signal)).rejects.toThrow("symbolic link");
+  await expect(renameMeeting({ ...selected, id: "alias" }, "Different", signal, library)).rejects.toThrow(
+    "symbolic link",
+  );
 });
 
 it("leaves native notes intact while Hex owns the instance lock and allows saving once it releases the lock", async () => {
   const { root, path, original } = await fixture();
   const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
   try {
-    vi.mocked(readStatus).mockResolvedValue({ ...idle, meeting: { ...idle.meeting, state: "recording" } });
-    await expect(renameMeeting(selected, "New title", signal)).rejects.toThrow("Wait for Hex");
-    expect(confirmAlert).not.toHaveBeenCalled();
-    expect(control).not.toHaveBeenCalled();
+    await expect(renameMeeting(selected, "New title", signal, library)).rejects.toThrow("using the library");
     await writeFile(path, original.replace('"Generated title"', '"New notes"'));
   } finally {
     await native.close();
   }
-  await renameMeeting(selected, "New title", signal);
+  await renameMeeting(selected, "New title", signal, library);
   expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ title: "New title", notes: { title: "New notes" } });
-});
-
-it("waits for a confirmed idle Hex to release its lock before committing the title", async () => {
-  const { root, path } = await fixture();
-  const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
-  try {
-    vi.mocked(readStatus).mockResolvedValue(idle);
-    vi.mocked(confirmAlert).mockResolvedValue(true);
-    vi.mocked(control).mockImplementationOnce(async () => {
-      setTimeout(() => void native.close(), 150);
-      return { version: 4, status: "done", message: "Quitting Hex", changed: true };
-    });
-    await expect(renameMeeting(selected, "Saved in Raycast", signal)).resolves.toBe(true);
-    expect(confirmAlert).toHaveBeenCalledOnce();
-    expect(control).toHaveBeenCalledExactlyOnceWith(["quit"]);
-    expect(JSON.parse(await readFile(path, "utf8")).title).toBe("Saved in Raycast");
-  } finally {
-    await native.close();
-  }
-});
-
-it.each(["cancelled", "started dictation", "dismissed form"])("does not quit after %s", async (reason) => {
-  const { root, path, original } = await fixture();
-  const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
-  const save = new AbortController();
-  try {
-    vi.mocked(readStatus).mockResolvedValue(idle);
-    vi.mocked(confirmAlert).mockImplementationOnce(async () => {
-      if (reason === "started dictation")
-        vi.mocked(readStatus).mockResolvedValue({ ...idle, capture: { ...idle.capture, pending_jobs: 1 } });
-      if (reason === "dismissed form") save.abort();
-      return reason !== "cancelled";
-    });
-    const result = renameMeeting(selected, "Another title", save.signal);
-    if (reason === "cancelled") await expect(result).resolves.toBe(false);
-    else await expect(result).rejects.toThrow();
-    expect(control).not.toHaveBeenCalled();
-    expect(await readFile(path, "utf8")).toBe(original);
-  } finally {
-    await native.close();
-  }
 });
 
 it("persists a generated title when the user explicitly saves it", async () => {
   const { path } = await fixture();
-  await renameMeeting(selected, selected.title, signal);
+  await renameMeeting(selected, selected.title, signal, library);
   expect(JSON.parse(await readFile(path, "utf8"))).toMatchObject({ title: selected.title, title_source: "user" });
 });
 
 it("leaves the manifest intact after cancellation", async () => {
   const { path, original } = await fixture();
-  await expect(renameMeeting(selected, "New title", AbortSignal.abort())).rejects.toThrow();
+  await expect(renameMeeting(selected, "New title", AbortSignal.abort(), library)).rejects.toThrow();
   expect(await readFile(path, "utf8")).toBe(original);
+});
+
+it("keeps the selected library bound to the recording when the configured folder switches", async () => {
+  const first = await fixture();
+  const selection = await listRecordings();
+  const second = await fixture();
+  expect(selection.library).toBe(await realpath(first.root));
+  await expect(renameMeeting(selected, "Another title", signal, selection.library!)).rejects.toThrow("library changed");
+  expect(await readFile(first.path, "utf8")).toBe(first.original);
+  expect(await readFile(second.path, "utf8")).toBe(second.original);
+});
+
+it("rejects malformed UTF-8 without replacing bytes in unrelated fields", async () => {
+  const { path, original } = await fixture();
+  const invalid = Buffer.concat([
+    Buffer.from(original.slice(0, -1) + ',"extra":"'),
+    Buffer.from([0xff]),
+    Buffer.from('"}'),
+  ]);
+  await writeFile(path, invalid);
+  await expect(renameMeeting(selected, "New title", signal, library)).rejects.toThrow();
+  expect(await readFile(path)).toEqual(invalid);
 });

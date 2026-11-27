@@ -41,7 +41,7 @@ Enable Meetings in Hex, then run **Start Meeting Recording**. Enter a title or l
 
 ### Renaming a meeting
 
-Select a finished recording in **Meetings** and press **⌘E**, or choose **Rename Meeting** in Actions. Edit the prefilled title and press **⌘Return** to save. If Hex is open, Raycast offers **Quit Hex and Save**. Hex stays closed until you reopen it. If Hex is recording or processing, wait for it to finish and save again. **Escape** returns to the list and discards the edit. The new title appears in both Raycast and Hex.
+Select a finished recording in **Meetings** and press **⌘E**, or choose **Rename Meeting** in Actions. Edit the prefilled title and press **⌘Return** to save. **Escape** returns to the list and discards the edit. Quit Hex before saving. If its recording library is in use, the form keeps your draft so you can retry after Hex closes. The new title appears in both Raycast and Hex.
 
 Hex 3.5.0 has no rename CLI command. The extension updates the saved recording’s title and marks it as user-provided, so it takes precedence over generated titles. Previously exported Markdown files keep their original names and headings. Checked against Hex 3.5.0 on November 27, 2026. [Hex title resolution](https://github.com/anomalyco/hex/blob/v3.5.0/src/meeting/notes.rs#L415-L448)
 
