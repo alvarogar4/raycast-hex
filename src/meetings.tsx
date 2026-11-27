@@ -2,7 +2,7 @@ import { Action, ActionPanel, Icon, Keyboard, List } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { inlineErrors, ReadError, RefreshAction } from "./feedback";
 import type { Meeting } from "./hex";
-import { canRenameMeeting, listRecordings } from "./meeting-title";
+import { listRecordings } from "./meeting-title";
 import { runMeetingControl } from "./meeting-controls";
 import { OpenPaneAction } from "./open-pane-action";
 import { RenameMeetingForm } from "./rename-meeting";
@@ -30,7 +30,7 @@ export default function Meetings() {
           revalidate();
         }}
       />
-      {data?.library && meeting && canRenameMeeting(meeting) && (
+      {data?.library && meeting && (
         <Action.Push
           title="Rename Meeting"
           icon={Icon.Pencil}

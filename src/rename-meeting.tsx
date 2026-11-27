@@ -1,7 +1,7 @@
 import { Action, ActionPanel, Form, useNavigation } from "@raycast/api";
 import { useEffect, useRef, useState } from "react";
 import type { Meeting } from "./hex";
-import { renameMeeting } from "./meeting-title";
+import { canRenameMeeting, renameMeeting } from "./meeting-title";
 
 export function RenameMeetingForm({
   meeting,
@@ -66,6 +66,9 @@ export function RenameMeetingForm({
           setError(undefined);
         }}
       />
+      {!canRenameMeeting(meeting) && (
+        <Form.Description text="You can edit the title now. Once recording and transcription finish, quit Hex and save." />
+      )}
     </Form>
   );
 }

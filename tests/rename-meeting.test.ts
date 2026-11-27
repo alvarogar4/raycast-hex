@@ -30,7 +30,7 @@ vi.mock("@raycast/api", () => ({
   Icon: { Pencil: "pencil" },
   Keyboard: { Shortcut: { Common: { Edit: { modifiers: ["cmd"], key: "e" } } } },
   List: Object.assign(() => null, { Item: "item", EmptyView: "empty", Section: "section" }),
-  Form: Object.assign(() => null, { TextField: "textfield" }),
+  Form: Object.assign(() => null, { TextField: "textfield", Description: "description" }),
   useNavigation: () => ({ pop: ui.pop }),
 }));
 vi.mock("@raycast/utils", () => ({ usePromise: ui.usePromise }));
@@ -73,13 +73,17 @@ it("opens a prefilled Raycast form for exactly the selected row and returns to t
   expect(action.props.shortcut).toEqual({ modifiers: ["cmd"], key: "e" });
   expect(action.props.target.type).toBe(RenameMeetingForm);
   const form = RenameMeetingForm(action.props.target.props);
-  expect(form.props.children.props.value).toBe(second.title);
+  expect(form.props.children[0].props.value).toBe(second.title);
+  expect(form.props.children[1]).toBeFalsy();
   await form.props.actions.props.children.props.onSubmit({ title: "  New title  " });
   expect(renameMeeting).toHaveBeenCalledExactlyOnceWith(second, "New title", expect.any(AbortSignal), library);
   expect(refresh).toHaveBeenCalledOnce();
   expect(ui.pop).toHaveBeenCalledOnce();
-  expect(rename(active)).toBeUndefined();
-  expect(rename(transcribing)).toBeUndefined();
+  for (const item of [active, transcribing]) {
+    const draft = RenameMeetingForm(rename(item).props.target.props);
+    expect(draft.props.children[0].props.value).toBe(item.props.title);
+    expect(draft.props.children[1].props.text).toContain("transcription");
+  }
   expect(rename(empty)).toBeUndefined();
 });
 
@@ -105,7 +109,7 @@ it("keeps an old save from dismissing another form and ignores repeat submission
   const form = RenameMeetingForm({ meeting, library, refresh: vi.fn() });
   const submit = form.props.actions.props.children.props.onSubmit;
   const save = submit({ title: "First change" });
-  form.props.children.props.onChange("Unsubmitted correction");
+  form.props.children[0].props.onChange("Unsubmitted correction");
   expect(ui.setDraft).not.toHaveBeenCalled();
   await submit({ title: "Second change" });
   expect(renameMeeting).toHaveBeenCalledTimes(1);

@@ -67,13 +67,9 @@ async function writeTitle(root: string, selected: Meeting, name: string, signal:
     throw new Error("This recording is busy or its format has changed.");
   const { meetings } = await readMeetings(root);
   const current = meetings.find((meeting) => meeting.id === selected.id);
-  if (
-    !current ||
-    !canRenameMeeting(current) ||
-    current.timestamp_ms !== selected.timestamp_ms ||
-    current.title !== selected.title
-  )
+  if (!current || current.timestamp_ms !== selected.timestamp_ms || current.title !== selected.title)
     throw new Error(changed);
+  if (!canRenameMeeting(current)) throw new Error("Wait for recording and transcription to finish, then save again.");
   if (stored.data.title === name && stored.data.title_source === "user") return;
 
   const lock = await open(
