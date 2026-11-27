@@ -6,7 +6,8 @@ import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import { confirmDiscard, showHexError } from "./feedback";
 import type { HistoryEntry } from "./hex";
-import { lockHistory, moveLockedTranscript } from "./transcript-store";
+import { withLibraryAccess } from "./library-access";
+import { moveLockedTranscript } from "./transcript-store";
 
 export async function trashTranscript(entry: HistoryEntry): Promise<boolean> {
   const label = entry.final_text.trim().slice(0, 90) || "Empty dictation";
@@ -29,14 +30,10 @@ export async function trashTranscript(entry: HistoryEntry): Promise<boolean> {
     const support = process.env.HEX_APPLICATION_SUPPORT_DIR ?? join(homedir(), "Library/Application Support/hex");
     if (!isAbsolute(support)) throw new Error("Hex's history folder must be an absolute path.");
     const root = await realpath(support);
-    const lock = await lockHistory(root);
-    if (!lock) throw new Error("Hex history is in use. Quit Hex and retry ⌃K.");
-    let detail;
-    try {
-      detail = await moveLockedTranscript(root, entry);
-    } finally {
-      await lock.close();
-    }
+    const detail = await withLibraryAccess(root, async (offline) => {
+      if (!offline) throw new Error("Hex history is in use. Quit Hex and retry ⌃K.");
+      return moveLockedTranscript(root, entry);
+    });
     await showToast({ style: Toast.Style.Success, title: "Moved Transcript to Trash", message: detail });
     return true;
   } catch (error) {

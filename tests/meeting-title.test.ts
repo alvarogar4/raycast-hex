@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { listRecordings, renameMeeting, type MeetingLibrary } from "../src/meeting-title";
 import { readMeetings, renameWithHex, resolveHexExecutable, supportsMeetingRename, type Meeting } from "../src/hex";
 import { HexStopped } from "../src/cli";
+import { withLibraryAccess } from "../src/library-access";
 
 vi.mock("@raycast/api", () => ({
   environment: {
@@ -206,7 +207,9 @@ it("serializes live saves and rejects an edit that has gone stale in the meantim
   const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
   vi.mocked(supportsMeetingRename).mockResolvedValue(true);
   vi.mocked(renameWithHex).mockImplementationOnce(async () => {
-    await expect(renameMeeting(selected, "Second", signal, library)).rejects.toThrow("Another rename");
+    await expect(renameMeeting(selected, "Second", signal, library)).rejects.toThrow(
+      "Another Raycast library operation",
+    );
     vi.mocked(readMeetings).mockResolvedValue({
       version: 1,
       truncated: false,
@@ -273,4 +276,36 @@ it("rejects malformed UTF-8 without replacing bytes in unrelated fields", async 
   await writeFile(path, invalid);
   await expect(renameMeeting(selected, "New title", signal, library)).rejects.toThrow();
   expect(await readFile(path)).toEqual(invalid);
+});
+
+it("does not dispatch to Hex when another Raycast operation owns the offline library", async () => {
+  const { root } = await fixture();
+  vi.mocked(supportsMeetingRename).mockResolvedValue(true);
+  await withLibraryAccess(root, async (offline) => {
+    expect(offline).toBe(true);
+    await expect(renameMeeting(selected, "Wrong library", signal, library)).rejects.toThrow(
+      "Another Raycast library operation",
+    );
+  });
+  expect(renameWithHex).not.toHaveBeenCalled();
+});
+
+it("cancels the selection read and releases the operation lock before dispatch", async () => {
+  const { root } = await fixture();
+  const native = await open(join(root, "listener.lock"), constants.O_RDWR | constants.O_NONBLOCK | 0x20);
+  const edit = new AbortController();
+  vi.mocked(supportsMeetingRename).mockResolvedValue(true);
+  vi.mocked(readMeetings).mockImplementationOnce(async (_root, _executable, preflight) => {
+    expect(preflight).toBe(edit.signal);
+    edit.abort();
+    return Promise.reject(edit.signal.reason);
+  });
+  try {
+    await expect(renameMeeting(selected, "Cancelled", edit.signal, library)).rejects.toThrow();
+    expect(renameWithHex).not.toHaveBeenCalled();
+    await renameMeeting(selected, "Next edit", signal, library);
+    expect(renameWithHex).toHaveBeenCalledOnce();
+  } finally {
+    await native.close();
+  }
 });

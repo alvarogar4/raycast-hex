@@ -179,7 +179,7 @@ export function renameWithHex(executable: string, id: string, title: string, lib
   });
 }
 
-export function readMeetings(library?: string, executable = hexExecutable()) {
+export function readMeetings(library?: string, executable = hexExecutable(), signal?: AbortSignal) {
   return executeHex(
     executable,
     ["meetings", "list", "--json", "--limit", "200"],
@@ -188,7 +188,7 @@ export function readMeetings(library?: string, executable = hexExecutable()) {
       truncated: z.boolean(),
       meetings: z.array(meeting),
     }),
-    undefined,
+    signal,
     library ? { ...process.env, HEX_APPLICATION_SUPPORT_DIR: library } : undefined,
   );
 }
