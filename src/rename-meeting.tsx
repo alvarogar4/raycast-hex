@@ -21,7 +21,7 @@ export function RenameMeetingForm({ meeting, refresh }: { meeting: Meeting; refr
     pending.current = save;
     setSaving(true);
     try {
-      await renameMeeting(meeting, name, save.signal);
+      if (!(await renameMeeting(meeting, name, save.signal))) return;
       refresh();
       if (!save.signal.aborted) pop();
     } catch (error) {

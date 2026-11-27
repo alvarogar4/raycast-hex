@@ -1,12 +1,14 @@
-import { getPreferenceValues } from "@raycast/api";
+import { confirmAlert, getPreferenceValues } from "@raycast/api";
 import { applyEdits, modify } from "jsonc-parser/lib/esm/main.js";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
-import { type Meeting, readMeetings } from "./hex";
+import { HexStopped } from "./cli";
+import { control, type Meeting, readMeetings, readStatus } from "./hex";
 import { lockHistory } from "./transcript-store";
 
 const manifest = z.object({
@@ -34,13 +36,58 @@ export async function renameMeeting(selected: Meeting, title: string, signal: Ab
   if (hexPath && hexPath !== installed && (await realpath(hexPath)) !== (await realpath(installed)))
     throw new Error("Rename Meeting requires the installed Hex.app CLI.");
   const root = await realpath(support);
-  const instance = await lockHistory(root);
-  if (!instance) throw new Error("Hex is running. Quit Hex before saving the title.");
+  const instance = await lockForRename(root, signal);
+  if (!instance) return false;
   try {
     await writeTitle(root, selected, name, signal);
+    return true;
   } finally {
     await instance.close();
   }
+}
+
+async function lockForRename(root: string, signal: AbortSignal) {
+  const lock = await lockHistory(root);
+  if (lock) return lock;
+  if (await hexIsIdle()) {
+    signal.throwIfAborted();
+    const confirmed = await confirmAlert({
+      title: "Quit Hex and Save?",
+      message:
+        "Hex must close to rename the recording. Save any open work in Hex first. You can reopen Hex after saving.",
+      primaryAction: { title: "Quit Hex and Save" },
+    });
+    if (!confirmed) return;
+    if (await hexIsIdle()) {
+      signal.throwIfAborted();
+      await control(["quit"]).catch((error) => {
+        if (!(error instanceof HexStopped)) throw error;
+      });
+    }
+  }
+  // Hex acknowledges quit before releasing its instance lock.
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await setTimeout(100, undefined, { signal });
+    const lock = await lockHistory(root);
+    if (lock) return lock;
+  }
+  throw new Error("Hex’s recording library is still in use. Try saving again.");
+}
+
+async function hexIsIdle() {
+  const status = await readStatus().catch((error) => {
+    if (!(error instanceof HexStopped)) throw error;
+  });
+  if (!status) return false;
+  if (
+    status.meeting.state !== "idle" ||
+    status.capture.state !== "idle" ||
+    status.capture.recording !== null ||
+    status.capture.pending_jobs !== 0 ||
+    status.model.preparing !== null
+  )
+    throw new Error("Wait for Hex to finish recording or processing, then save again.");
+  return true;
 }
 
 async function writeTitle(root: string, selected: Meeting, name: string, signal: AbortSignal) {

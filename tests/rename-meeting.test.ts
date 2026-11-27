@@ -60,6 +60,7 @@ it("opens a prefilled Raycast form for exactly the selected row and returns to t
   expect(action.props.target.type).toBe(RenameMeetingForm);
   const form = RenameMeetingForm(action.props.target.props);
   expect(form.props.children.props.defaultValue).toBe(second.title);
+  vi.mocked(renameMeeting).mockResolvedValueOnce(true);
   await form.props.actions.props.children.props.onSubmit({ title: "  New title  " });
   expect(renameMeeting).toHaveBeenCalledExactlyOnceWith(second, "New title", expect.any(AbortSignal));
   expect(refresh).toHaveBeenCalledOnce();
@@ -82,9 +83,17 @@ it("keeps a blank or rejected edit in the form", async () => {
   expect(ui.pop).not.toHaveBeenCalled();
 });
 
+it("keeps the draft open when the user cancels the quit confirmation", async () => {
+  const refresh = vi.fn();
+  vi.mocked(renameMeeting).mockResolvedValueOnce(false);
+  await RenameMeetingForm({ meeting, refresh }).props.actions.props.children.props.onSubmit({ title: "New title" });
+  expect(ui.pop).not.toHaveBeenCalled();
+  expect(refresh).not.toHaveBeenCalled();
+});
+
 it("keeps an old save from dismissing another form and ignores repeat submissions", async () => {
-  let complete: () => void = () => {};
-  const promise = new Promise<void>((resolve) => {
+  let complete: (saved: boolean) => void = () => {};
+  const promise = new Promise<boolean>((resolve) => {
     complete = resolve;
   });
   vi.mocked(renameMeeting).mockReturnValueOnce(promise);
@@ -94,7 +103,7 @@ it("keeps an old save from dismissing another form and ignores repeat submission
   expect(renameMeeting).toHaveBeenCalledTimes(1);
   const unmount = ui.effect.mock.lastCall![0]();
   unmount();
-  complete();
+  complete(true);
   await save;
   expect(ui.pop).not.toHaveBeenCalled();
 });
