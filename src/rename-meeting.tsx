@@ -66,9 +66,13 @@ export function RenameMeetingForm({
           setError(undefined);
         }}
       />
-      {!canRenameMeeting(meeting) && (
-        <Form.Description text="You can edit the title now. Once recording and transcription finish, quit Hex and save." />
-      )}
+      <Form.Description
+        text={
+          canRenameMeeting(meeting)
+            ? "Save with Hex closed. If Hex is working on another meeting, let it finish first."
+            : "You can edit the title now. Once recording and transcription finish, quit Hex and save."
+        }
+      />
     </Form>
   );
 }
